@@ -284,3 +284,32 @@ end-to-end against the real workspace (launch, manifest, page API,
 import semantics, edge add/delete, AMBIGUOUS, REVIEWED rejection of
 incomplete pages, restore). No AI output is Gold; no freeze was
 performed. Status: `OWNER_HUMAN_LAYOUT_ANNOTATION_REQUIRED`.
+
+## LA-0.7 annotation UX compression
+
+The human annotation helper was extended with review modes (page overview,
+table structure, ownership risk, ambiguous, final page review), a
+risk-prioritized owner review queue, filters, keyboard shortcuts with undo,
+bulk table-structure confirmation and bulk low-risk ownership confirmation.
+Bulk actions require an explicit owner click, are recorded in a private
+operation log and never set page REVIEWED by themselves. A page completion
+gate rejects REVIEWED while table structures are unaccepted or HIGH/AMBIGUOUS
+relations are unresolved, and a rejected REVIEWED payload never overwrites
+the owner draft. Predictions remain hidden on first load; imported
+suggestions keep `human_confirmed=false`.
+
+Ownership relationships are classified LOW / MEDIUM / HIGH / AMBIGUOUS from
+prediction metadata for review prioritization only; classification never
+mutates parser output. The stratified DEV sample, its manifest digest and
+the document-level Final-Gate reserve are unchanged. At least 20% of DEV
+pages are flagged `SECOND_REVIEW_REQUIRED` as a queue for the owner. A
+stale untracked runtime index was quarantined outside the repository with a
+recorded SHA256, after which the isolated backend suite passes with zero
+failures.
+
+End-to-end annotation-helper validation against the real workspace:
+20/20 checks passed. Backend suite: 1,024 passed, 2 skipped, 0 failed.
+Frontend suite: 34 passed. Protected research hashes: 28/28 PASS. Parser
+semantic diff relative to the phase start commit: zero. No Gold was
+created automatically and nothing was frozen or pushed. Status remains
+`OWNER_HUMAN_LAYOUT_ANNOTATION_REQUIRED`.

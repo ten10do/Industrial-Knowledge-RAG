@@ -14,12 +14,28 @@
     </div>
     <div id="save-state" class="save-state">Loading…</div>
   </header>
-  <div class="privacy-banner">Local-only workspace. Predictions start hidden and never become Gold until explicitly reviewed.</div>
+  <div class="privacy-banner">Local-only workspace. Predictions start hidden and never become Gold until explicitly reviewed. Bulk actions require an owner click and are logged.</div>
+  <nav class="mode-bar" aria-label="Review modes">
+    <button class="mode-tab active" data-mode="PAGE_OVERVIEW">A · Page overview</button>
+    <button class="mode-tab" data-mode="TABLE_STRUCTURE_REVIEW">B · Table structure</button>
+    <button class="mode-tab" data-mode="OWNERSHIP_RISK_REVIEW">C · Ownership risk</button>
+    <button class="mode-tab" data-mode="AMBIGUOUS_REVIEW">D · Ambiguous</button>
+    <button class="mode-tab" data-mode="FINAL_PAGE_REVIEW">E · Final page review</button>
+  </nav>
   <main>
     <aside>
       <div id="progress" class="progress"></div>
+      <div id="dashboard" class="dashboard"></div>
       <input id="page-filter" type="search" placeholder="Filter page or slice">
       <nav id="page-list" aria-label="Annotation pages"></nav>
+      <div class="card queue-panel">
+        <h2>Review queue</h2>
+        <div id="queue-summary" class="queue-summary"></div>
+        <div class="inline-buttons">
+          <button id="queue-prev" title="Previous (P)">◀ Prev</button>
+          <button id="queue-next" title="Next (N)">Next ▶</button>
+        </div>
+      </div>
     </aside>
     <section class="workspace">
       <div class="toolbar">
@@ -40,8 +56,51 @@
             <img id="page-preview" alt="Private PDF page preview">
             <svg id="overlay" aria-label="Layout annotation overlay"></svg>
           </div>
+          <div class="keyboard-help">
+            Shortcuts: A accept · R reject · M ambiguous · N next · P previous · T next table · H next high-risk · Ctrl+Z undo
+          </div>
         </div>
         <div class="editor-panel">
+          <section id="overview-panel" class="card mode-panel">
+            <h2>Page overview</h2>
+            <div id="overview-counts" class="counts-grid"></div>
+            <div class="inline-buttons">
+              <button id="open-highest-risk-table">Open highest-risk table</button>
+              <button id="goto-next-high-risk">Next high-risk relation (H)</button>
+            </div>
+          </section>
+          <section id="table-review-panel" class="card mode-panel hidden">
+            <h2>Table structure review</h2>
+            <div id="table-review-list" class="entity-list"></div>
+          </section>
+          <section id="ownership-panel" class="card mode-panel hidden">
+            <h2>Ownership risk review</h2>
+            <select id="edge-filter">
+              <option value="unresolved">Only unresolved</option>
+              <option value="all">All relations</option>
+              <option value="HIGH">Only high-risk</option>
+              <option value="AMBIGUOUS">Only ambiguous</option>
+              <option value="HEADER_APPLIES_TO">HEADER_APPLIES_TO only</option>
+              <option value="unit">Unit bindings only</option>
+              <option value="model">Model-column only</option>
+              <option value="merged">Merged headers only</option>
+              <option value="parameter">Parameter-code only</option>
+              <option value="fault">Fault-code only</option>
+            </select>
+            <div id="ownership-counts" class="counts-grid small"></div>
+            <div id="edge-review-list" class="entity-list"></div>
+          </section>
+          <section id="ambiguous-panel" class="card mode-panel hidden">
+            <h2>Ambiguous review</h2>
+            <p class="hint">Resolve each candidate to a concrete header→value edge, or keep it explicitly AMBIGUOUS. Ambiguous items are counted separately and never forced into matches.</p>
+            <div id="ambiguous-list" class="entity-list"></div>
+          </section>
+          <section id="final-review-panel" class="card mode-panel hidden">
+            <h2>Final page review</h2>
+            <div id="final-checklist" class="checklist"></div>
+            <button id="mark-reviewed" class="danger">Confirm page and mark REVIEWED</button>
+            <pre id="reviewed-gate" class="gate-output"></pre>
+          </section>
           <section class="card page-controls">
             <h2>Page authority</h2>
             <label>Status
@@ -50,7 +109,6 @@
               </select>
             </label>
             <label><input id="page-confirmed" type="checkbox"> Human confirmed page</label>
-            <button id="confirm-all" class="danger">Confirm all current items and mark REVIEWED</button>
             <button id="validate-page">Validate</button>
             <pre id="validation"></pre>
           </section>

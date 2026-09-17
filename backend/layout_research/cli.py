@@ -167,6 +167,13 @@ def build_parser() -> argparse.ArgumentParser:
     sample.add_argument("--source-map", required=True)
     sample.add_argument("--output", required=True)
     sample.add_argument("--target-pages", type=int, default=36)
+
+    queue = subparsers.add_parser(
+        "build-review-queue",
+        help="research-only ownership risk classification + OWNER_REVIEW_QUEUE (prediction_only)",
+    )
+    queue.add_argument("--workspace", required=True)
+    queue.add_argument("--pages-jsonl", default=None)
     return parser
 
 
@@ -265,6 +272,12 @@ def main(argv: list[str] | None = None) -> None:
         Path(args.output).parent.mkdir(parents=True, exist_ok=True)
         Path(args.output).write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(json.dumps({key: value for key, value in plan.items() if key != "pages"}, ensure_ascii=False))
+        return
+    if args.command == "build-review-queue":
+        from .review_risk import build_review_queue
+
+        result = build_review_queue(args.workspace, pages_jsonl=args.pages_jsonl)
+        print(json.dumps(result["workload"], ensure_ascii=False))
         return
     if args.command == "evaluate":
         if Path(args.gold).resolve() != Path(args.input).resolve():
