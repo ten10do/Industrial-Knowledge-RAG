@@ -342,3 +342,27 @@ plus the authority guard pass; the layout suites count 65 passing tests;
 backend 1,037 passed / 0 failed. The DEV sample, manifest digest, reserve
 manuals and parser semantics are unchanged. Status remains
 `OWNER_HUMAN_LAYOUT_ANNOTATION_REQUIRED`.
+
+## LA-0.7.1 annotation runtime load fix
+
+Owner-run browser sessions hit a runtime load failure on the real
+workspace. Reproduced with a real browser and traced to two independent
+frontend defects, both fixed: (1) five render helpers read the annotation
+collection shape without a null guard, so the boot sequence crashed while
+no page was loaded yet; (2) the dashboard renderer had been renamed out
+of existence while two call sites still invoked it. The boot path now
+validates every unit payload against the collection contract and reports
+`ANNOTATION_UNIT_INVALID` with the missing field instead of crashing on
+null access; an invalid unit is never rendered as an empty-but-valid page.
+
+Real-browser end-to-end validation against the private workspace: boot,
+preview render, all five review modes, twelve units switched (single-page,
+cross-page continuation, merged header, multi column, unit column, fault
+code, borderless, model comparison, second-review) with zero console
+errors and zero load failures, and the draft state untouched. A scripted
+API sweep validated the full collection shape and preview route for all
+59 annotation units. Regression tests cover the payload contract, empty
+collection legality, single/cross-page units, preview route content and
+byte-identical draft immutability under loading. Backend suite: 1,044
+passed, 0 failed. Parser semantics, DEV sample, manifest digest and the
+Final-Gate reserve are unchanged.

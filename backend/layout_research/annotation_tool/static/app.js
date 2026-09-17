@@ -1,7 +1,7 @@
 const state = {
   manifest: null, page: null, annotation: null, prediction: null,
   selectedBlock: null, selectedTable: null, dirty: false, saveTimer: null, drawStart: null,
-  mode: 'PAGE_OVERVIEW', reviewData: null, queuePosition: 0, undoStack: [],
+  mode: 'PAGE_OVERVIEW', reviewData: null, queuePosition: 0, undoStack: [], workload: null,
   currentEdgeId: null, activeTableId: null,
 };
 const $ = id => document.getElementById(id);
@@ -28,15 +28,25 @@ async function loadReviewData() {
 
 async function loadDashboard() {
   try {
-    const workload = await getJSON('/api/workload');
-    $('dashboard').innerHTML = `
-      <div class="dash-row"><span>Pages reviewed</span><strong>${workload.pages_reviewed}/${workload.pages_total}</strong></div>
-      <div class="dash-row"><span>Tables reviewed</span><strong>${workload.tables_reviewed}/${workload.tables_total}</strong></div>
-      <div class="dash-row"><span>High-risk remaining</span><strong>${workload.high_risk_remaining}</strong></div>
-      <div class="dash-row"><span>Ambiguous remaining</span><strong>${workload.ambiguous_remaining}</strong></div>
-      <div class="dash-row"><span>Ownership unresolved</span><strong>${workload.ownership_unresolved}</strong></div>
-      <div class="dash-row"><span>Second-review pending</span><strong>${workload.second_review.filter(item => item.pending).length}/${workload.second_review.length}</strong></div>`;
-  } catch (error) { $('dashboard').textContent = `Dashboard unavailable: ${error.message}`; }
+    state.workload = await getJSON('/api/workload');
+  } catch (error) {
+    state.workload = null;
+    $('dashboard').textContent = `Dashboard unavailable: ${error.message}`;
+    return;
+  }
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const workload = state.workload;
+  if (!workload) return;
+  $('dashboard').innerHTML = `
+    <div class="dash-row"><span>Pages reviewed</span><strong>${workload.pages_reviewed}/${workload.pages_total}</strong></div>
+    <div class="dash-row"><span>Tables reviewed</span><strong>${workload.tables_reviewed}/${workload.tables_total}</strong></div>
+    <div class="dash-row"><span>High-risk remaining</span><strong>${workload.high_risk_remaining}</strong></div>
+    <div class="dash-row"><span>Ambiguous remaining</span><strong>${workload.ambiguous_remaining}</strong></div>
+    <div class="dash-row"><span>Ownership unresolved</span><strong>${workload.ownership_unresolved}</strong></div>
+    <div class="dash-row"><span>Second-review pending</span><strong>${workload.second_review.filter(item => item.pending).length}/${workload.second_review.length}</strong></div>`;
 }
 
 function pageStatus(key) {
@@ -85,9 +95,34 @@ function renderPageList() {
   }));
 }
 
+// Annotation units must expose the full editable collection shape. A unit
+// that violates the schema is reported explicitly, never rendered as an
+// empty-but-valid page.
+const UNIT_COLLECTIONS = ['blocks', 'table_regions', 'rows', 'columns', 'cells', 'relationships'];
+function validateUnitPayload(payload, key) {
+  for (const field of ['page', 'annotation', 'prediction']) {
+    if (!payload[field] || typeof payload[field] !== 'object') {
+      throw new Error(`ANNOTATION_UNIT_INVALID (${key}): response field "${field}" missing or not an object`);
+    }
+  }
+  for (const field of UNIT_COLLECTIONS) {
+    if (!Array.isArray(payload.annotation[field])) {
+      throw new Error(`ANNOTATION_UNIT_INVALID (${key}): annotation.${field} missing or not a list`);
+    }
+  }
+  if (!payload.prediction.options || typeof payload.prediction.options !== 'object') {
+    throw new Error(`ANNOTATION_UNIT_INVALID (${key}): prediction.options missing or not an object`);
+  }
+}
+
+function collection(collectionName) {
+  return state.annotation ? state.annotation[collectionName] || [] : [];
+}
+
 async function loadPage(key) {
   if (state.dirty) await saveAnnotation();
   const payload = await getJSON(`/api/page?key=${encodeURIComponent(key)}`);
+  validateUnitPayload(payload, key);
   state.page = payload.page; state.annotation = payload.annotation; state.prediction = payload.prediction;
   state.selectedBlock = null; state.selectedTable = null; state.dirty = false;
   state.undoStack = []; state.currentEdgeId = null;
@@ -501,7 +536,7 @@ async function markReviewed() {
     }
     state.dirty = false;
     setSaveState(result.saved ? 'REVIEWED saved' : 'REVIEWED blocked by completion gate');
-    renderDashboard(); renderPageList();
+    await loadDashboard(); renderPageList();
   } catch (error) {
     delete state.annotation.owner_clicked;
     state.annotation.status = 'IN_PROGRESS';
@@ -561,7 +596,8 @@ function nextTable() {
 
 // ------------------------------------------------------------ entity UIs
 function renderBlocks() {
-  $('block-list').replaceChildren(...state.annotation.blocks.map(block => {
+  if (!state.annotation) return;
+  $('block-list').replaceChildren(...collection('blocks').map(block => {
     const row = document.createElement('div'); row.className = `entity-row ${state.selectedBlock === block.block_id ? 'selected' : ''}`;
     row.innerHTML = `<span>${block.reading_order}</span><strong>${block.block_type}</strong><span class="grow">${block.text || block.block_id}</span><span>${block.human_confirmed ? '✓' : 'suggestion'}</span>`;
     row.onclick = () => selectBlock(block.block_id); return row;
@@ -576,7 +612,8 @@ function selectBlock(id) {
 }
 
 function renderTables() {
-  $('table-list').replaceChildren(...state.annotation.table_regions.map(table => {
+  if (!state.annotation) return;
+  $('table-list').replaceChildren(...collection('table_regions').map(table => {
     const row = document.createElement('div'); row.className = `entity-row ${state.selectedTable === table.table_region_id ? 'selected' : ''}`;
     row.innerHTML = `<strong>${table.table_region_id}</strong><span class="grow">${table.bbox.join(', ')}</span><span>${table.human_confirmed ? '✓' : 'suggestion'}</span>`;
     row.onclick = () => selectTable(table.table_region_id); return row;
@@ -586,7 +623,8 @@ function renderTables() {
 function selectTable(id) { state.selectedTable = id; state.activeTableId = id; renderAll(); }
 
 function renderGroups() {
-  const groups = [...state.annotation.rows.map(item => ({...item, kind: 'row', id: item.row_id})), ...state.annotation.columns.map(item => ({...item, kind: 'column', id: item.column_id}))];
+  if (!state.annotation) return;
+  const groups = [...collection('rows').map(item => ({...item, kind: 'row', id: item.row_id})), ...collection('columns').map(item => ({...item, kind: 'column', id: item.column_id}))];
   $('group-list').replaceChildren(...groups.map(group => {
     const row = document.createElement('div'); row.className = 'entity-row'; row.innerHTML = `<strong>${group.kind}</strong><span class="grow">${group.id}</span><button>×</button>`;
     row.querySelector('button').onclick = () => { state.annotation[group.kind === 'row' ? 'rows' : 'columns'] = state.annotation[group.kind === 'row' ? 'rows' : 'columns'].filter(item => item[`${group.kind}_id`] !== group.id); changed(); };
@@ -595,7 +633,8 @@ function renderGroups() {
 }
 
 function renderEdges() {
-  $('edge-list').replaceChildren(...state.annotation.relationships.map(edge => {
+  if (!state.annotation) return;
+  $('edge-list').replaceChildren(...collection('relationships').map(edge => {
     const row = document.createElement('div'); row.className = 'entity-row'; row.innerHTML = `<strong>${edge.relationship_type}</strong><span class="grow">${edge.source_id || '∅'} → ${edge.target_id}</span><span>${edge.human_confirmed ? '✓' : 'suggestion'}</span><button>×</button>`;
     row.querySelector('button').onclick = () => { state.annotation.relationships = state.annotation.relationships.filter(item => item.relationship_id !== edge.relationship_id); changed(); };
     return row;
@@ -603,7 +642,8 @@ function renderEdges() {
 }
 
 function renderEntityIds() {
-  const ids = [...state.annotation.blocks.map(item => item.block_id), ...state.annotation.table_regions.map(item => item.table_region_id), ...state.annotation.rows.map(item => item.row_id), ...state.annotation.columns.map(item => item.column_id), ...state.annotation.blocks.map(item => item.section_id).filter(Boolean)];
+  if (!state.annotation) return;
+  const ids = [...collection('blocks').map(item => item.block_id), ...collection('table_regions').map(item => item.table_region_id), ...collection('rows').map(item => item.row_id), ...collection('columns').map(item => item.column_id), ...collection('blocks').map(item => item.section_id).filter(Boolean)];
   $('entity-ids').replaceChildren(...[...new Set(ids)].map(id => new Option(id)));
 }
 
