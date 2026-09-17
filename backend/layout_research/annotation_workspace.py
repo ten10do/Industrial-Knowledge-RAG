@@ -327,18 +327,102 @@ def _render_preview(source_path: str, page_number: int, output: Path) -> None:
         pdf.close()
 
 
+def _load_precomputed_selection(
+    selection_manifest: str | Path,
+    pages_jsonl: str | Path,
+    source_map_path: str | Path,
+    corpus_root: str | Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, int], list[str]]:
+    """Research-only path: build the workspace from a frozen DEV sample plan."""
+    plan = json.loads(Path(selection_manifest).read_text(encoding="utf-8"))
+    mapping = json.loads(Path(source_map_path).read_text(encoding="utf-8"))
+    corpus = Path(corpus_root)
+    records_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    for line in Path(pages_jsonl).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        records_by_key[(record["doc_id"], record["page_number"])] = record
+
+    private_sources = []
+    for doc_id in plan["dev_documents"]:
+        entry = mapping[doc_id]
+        private_sources.append(
+            {
+                "doc_id": doc_id,
+                "source_path": str((corpus / entry["rel_path"]).resolve()),
+                "source_name": Path(entry["rel_path"]).name,
+                "vendor": entry.get("vendor", "unknown"),
+            }
+        )
+
+    selected: list[dict[str, Any]] = []
+    selected_keys: set[tuple[str, int]] = set()
+    coverage: Counter[str] = Counter()
+
+    def _add(record: dict[str, Any], reason: str, priority: int, base: dict[str, Any]) -> None:
+        key = (record["doc_id"], record["page_number"])
+        if key in selected_keys:
+            return
+        selected_keys.add(key)
+        selected.append(
+            {
+                "doc_id": record["doc_id"],
+                "page_number": record["page_number"],
+                "width": record["width"],
+                "height": record["height"],
+                "slices": record["slices"],
+                "layout_risk_score": record["layout_risk_score"],
+                "selection_reason": reason,
+                "review_priority": priority,
+                **base,
+            }
+        )
+        coverage.update(record["slices"])
+
+    for entry in plan["pages"]:
+        record = records_by_key[(entry["sanitized_doc_id"], entry["page_number"])]
+        _add(record, entry["selection_reason"], entry["review_priority"], {"dev_sample_id": entry["sample_id"]})
+    # Cross-page continuation units: page N + page N+1 annotate as one unit.
+    for unit in plan.get("continuation_units", []):
+        anchor_doc, anchor_page = unit["anchor"].rsplit(":p", 1)
+        continuation_key = (anchor_doc, int(unit["continuation"].rsplit(":p", 1)[1]))
+        record = records_by_key.get(continuation_key)
+        if record is not None and record["detected_table_count"]:
+            _add(record, "cross_page_continuation_unit", 8, {"dev_sample_id": "", "anchor_unit": unit["anchor"]})
+
+    selected.sort(key=lambda item: (item["doc_id"], item["page_number"]))
+    distribution = dict(sorted(coverage.items()))
+    available = {slice_name for record in records_by_key.values() for slice_name in record["slices"]}
+    missing = sorted(
+        slice_name for slice_name in TARGETS if slice_name != "ordinary_text" and slice_name not in available
+    )
+    return [], private_sources, selected, distribution, missing
+
+
 def prepare_human_annotation_workspace(
     source_map_path: str | Path,
     output_root: str | Path,
     *,
     max_pages: int = 36,
+    selection_manifest: str | Path | None = None,
+    pages_jsonl: str | Path | None = None,
+    corpus_root: str | Path | None = None,
 ) -> dict[str, Any]:
     logging.getLogger("pdfminer").setLevel(logging.ERROR)
     output = Path(output_root).resolve()
     for directory in ("pages", "previews", "predictions", "annotations", "exports", "audit"):
         (output / directory).mkdir(parents=True, exist_ok=True)
-    candidates, private_sources = discover_private_pages(source_map_path)
-    selected, distribution, missing = select_dev_pages(candidates, max_pages=max_pages)
+    if selection_manifest:
+        if pages_jsonl is None or corpus_root is None:
+            raise ValueError("selection manifest mode requires --pages-jsonl and --corpus-root")
+        candidates, private_sources, selected, distribution, missing = _load_precomputed_selection(
+            selection_manifest, pages_jsonl, source_map_path, corpus_root
+        )
+    else:
+        candidates, private_sources = discover_private_pages(source_map_path)
+        selected, distribution, missing = select_dev_pages(candidates, max_pages=max_pages)
+        selected = [dict(item, selection_reason="greedy_coverage", review_priority=0) for item in selected]
     source_by_doc = {item["doc_id"]: item for item in private_sources}
     selected_by_doc: dict[str, set[int]] = defaultdict(set)
     for page in selected:
@@ -410,6 +494,9 @@ def prepare_human_annotation_workspace(
             "width": page["width"],
             "height": page["height"],
             "slices": page["slices"],
+            "layout_risk_score": page.get("layout_risk_score", 0),
+            "selection_reason": page.get("selection_reason", ""),
+            "review_priority": page.get("review_priority", 0),
             "preview": f"previews/{key}.png",
             "prediction": f"predictions/{key}.json",
             "annotation": f"annotations/{key}.json",

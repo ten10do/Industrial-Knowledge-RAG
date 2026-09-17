@@ -6,9 +6,11 @@ from pathlib import Path
 
 from .annotation import freeze_dev_gold, validate_page_annotation
 from .annotation_workspace import prepare_human_annotation_workspace
+from .dev_sampling import allocate_final_gate_holdout, select_dev_sample
 from .evaluator import apply_frozen_gates, evaluate_pages, stable_id_reproducibility
 from .models import BBox, DocumentLayout, LayoutBlock, PageLayout, stable_id
 from .private_workspace import prepare_private_annotation_pack
+from .qualification import run_full_qualification
 from .synthetic import (
     gold_page,
     load_synthetic_fixture,
@@ -131,6 +133,9 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_human.add_argument("--source-map", required=True)
     prepare_human.add_argument("--output", required=True)
     prepare_human.add_argument("--max-pages", type=int, default=36)
+    prepare_human.add_argument("--selection-manifest", default=None)
+    prepare_human.add_argument("--pages-jsonl", default=None)
+    prepare_human.add_argument("--corpus-root", default=None)
 
     annotate = subparsers.add_parser("annotate", help="launch the local-only annotation helper")
     annotate.add_argument("--workspace", required=True)
@@ -145,6 +150,23 @@ def build_parser() -> argparse.ArgumentParser:
     freeze.add_argument("--workspace", required=True)
     freeze.add_argument("--output", required=True)
     freeze.add_argument("--correction-reason")
+
+    qualify = subparsers.add_parser("qualify-corpus", help="research-only full-corpus page qualification")
+    qualify.add_argument("--source-map", required=True)
+    qualify.add_argument("--corpus-root", required=True)
+    qualify.add_argument("--output", required=True)
+
+    allocate = subparsers.add_parser("allocate-holdout", help="research-only document-level Final-Gate holdout plan")
+    allocate.add_argument("--pages-jsonl", required=True)
+    allocate.add_argument("--source-map", required=True)
+    allocate.add_argument("--output", required=True)
+
+    sample = subparsers.add_parser("sample-dev", help="research-only stratified DEV sample + manifest digest")
+    sample.add_argument("--pages-jsonl", required=True)
+    sample.add_argument("--holdout", required=True)
+    sample.add_argument("--source-map", required=True)
+    sample.add_argument("--output", required=True)
+    sample.add_argument("--target-pages", type=int, default=36)
     return parser
 
 
@@ -159,7 +181,14 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(summary, ensure_ascii=False))
         return
     if args.command == "prepare-human":
-        summary = prepare_human_annotation_workspace(args.source_map, args.output, max_pages=args.max_pages)
+        summary = prepare_human_annotation_workspace(
+            args.source_map,
+            args.output,
+            max_pages=args.max_pages,
+            selection_manifest=args.selection_manifest,
+            pages_jsonl=args.pages_jsonl,
+            corpus_root=args.corpus_root,
+        )
         print(json.dumps(summary, ensure_ascii=False))
         return
     if args.command == "annotate":
@@ -209,6 +238,33 @@ def main(argv: list[str] | None = None) -> None:
             })
             ledger_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(json.dumps({"status": "REAL_LAYOUT_DEV_GOLD", "dev_gold_digest": payload["dev_gold_digest"]}))
+        return
+    if args.command == "qualify-corpus":
+        summary = run_full_qualification(args.source_map, args.corpus_root, args.output)
+        print(json.dumps({key: value for key, value in summary.items() if key != "document_summaries"}, ensure_ascii=False))
+        return
+    if args.command == "allocate-holdout":
+        from .dev_sampling import load_candidates
+
+        mapping = json.loads(Path(args.source_map).read_text(encoding="utf-8"))
+        vendors = {doc_id: entry.get("vendor", "unknown") for doc_id, entry in mapping.items()}
+        plan = allocate_final_gate_holdout(load_candidates(args.pages_jsonl), vendors)
+        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.output).write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(json.dumps(plan, ensure_ascii=False))
+        return
+    if args.command == "sample-dev":
+        from .dev_sampling import load_candidates
+
+        mapping = json.loads(Path(args.source_map).read_text(encoding="utf-8"))
+        vendors = {doc_id: entry.get("vendor", "unknown") for doc_id, entry in mapping.items()}
+        holdout = json.loads(Path(args.holdout).read_text(encoding="utf-8"))
+        plan = select_dev_sample(
+            load_candidates(args.pages_jsonl), holdout, vendors, target_pages=args.target_pages
+        )
+        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.output).write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(json.dumps({key: value for key, value in plan.items() if key != "pages"}, ensure_ascii=False))
         return
     if args.command == "evaluate":
         if Path(args.gold).resolve() != Path(args.input).resolve():

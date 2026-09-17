@@ -230,3 +230,57 @@ Verification after implementing the workflow:
 - tracked private artifact audit: PASS, zero paths
 
 Current LA-0.5 status is `HUMAN_ANNOTATION_ACTION_REQUIRED`, with an additional corpus-availability blocker. The owner must place actual private industrial manuals in the external corpus directory, rerun sanitized inventory and workspace preparation, then perform the human review. Parser heuristics and production runtime remain unchanged.
+
+## LA-0.6 → LA-0.7 qualified real corpus sampling
+
+A real industrial manual corpus later became available in the external
+private corpus directory. It was independently revalidated read-only
+(SHA256, page count, PDF integrity, text layer, geometry extraction)
+before any sampling: 11 qualified text-native manuals, 4,983 pages,
+7 vendors, zero duplicates.
+
+Full-corpus layout qualification (research-only, discovery signals only,
+never Gold) then scanned every page and emitted multi-label slice
+candidates plus a `LAYOUT_RISK_SCORE`. Aggregate slice availability over
+4,983 pages:
+
+| Slice | Pages |
+|---|---:|
+| simple_table | 3,614 |
+| mixed_layout | 3,565 |
+| unit_column | 3,152 |
+| section_table | 3,088 |
+| cross_page | 2,813 |
+| multi_column | 2,514 |
+| merged_header | 1,505 |
+| model_comparison | 1,178 |
+| ordinary_text | 1,369 |
+| parameter_code_table | 631 |
+| borderless_table | 310 |
+| fault_code_table | 148 |
+
+High-risk candidate pages (risk score >= 4): 3,605.
+
+A document-level UNSEEN FINAL-GATE RESERVE of 3 complete qualified
+manuals (2,956 pages) was allocated before DEV sampling so that no DEV
+page and no Final-Gate page share a manual. The reserve is recorded as
+sanitized IDs and page counts only, is marked `FINAL_GATE_UNCONSUMED`,
+and receives no annotation, parser tuning or error analysis.
+
+The stratified DEV sample selects 36 pages from 7 different sanitized
+manuals across 5 vendors (maximum 6 pages from any single manual), with
+all twelve slice labels present, ordinary text kept non-dominant (4
+pages), and cross-page candidates bound to their following page as one
+associated annotation unit. The frozen DEV sample manifest digest is
+recorded in the private eval directory; the manifest contains sanitized
+IDs only.
+
+The private human annotation workspace was rebuilt from the frozen
+sample with rendered page previews, blind Flat-reference / Suggestion-1 /
+Suggestion-2 overlays, and suggestion import that keeps every imported
+item `human_confirmed=false` and page status below REVIEWED until the
+owner explicitly confirms. The annotation helper was exercised
+end-to-end against the real workspace (launch, manifest, page API,
+import semantics, edge add/delete, AMBIGUOUS, REVIEWED rejection of
+incomplete pages, restore). No AI output is Gold; no freeze was
+performed. Status: `OWNER_HUMAN_LAYOUT_ANNOTATION_REQUIRED`.
