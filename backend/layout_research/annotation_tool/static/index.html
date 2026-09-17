@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Human Layout DEV Annotation</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">REAL_LAYOUT_DEV_GOLD · DEV ONLY</p>
+      <h1>Industrial layout annotation</h1>
+    </div>
+    <div id="save-state" class="save-state">Loading…</div>
+  </header>
+  <div class="privacy-banner">Local-only workspace. Predictions start hidden and never become Gold until explicitly reviewed.</div>
+  <main>
+    <aside>
+      <div id="progress" class="progress"></div>
+      <input id="page-filter" type="search" placeholder="Filter page or slice">
+      <nav id="page-list" aria-label="Annotation pages"></nav>
+    </aside>
+    <section class="workspace">
+      <div class="toolbar">
+        <strong id="page-title">Select a page</strong>
+        <span id="slice-tags"></span>
+        <label><input id="show-predictions" type="checkbox"> Show prediction overlay</label>
+        <select id="prediction-option" disabled></select>
+        <button id="import-prediction" disabled>Use as editable suggestion</button>
+        <select id="draw-mode">
+          <option value="select">Select</option>
+          <option value="block">Draw block</option>
+          <option value="table">Draw table</option>
+        </select>
+      </div>
+      <div class="content-grid">
+        <div class="preview-panel">
+          <div id="preview-stage" class="preview-stage">
+            <img id="page-preview" alt="Private PDF page preview">
+            <svg id="overlay" aria-label="Layout annotation overlay"></svg>
+          </div>
+        </div>
+        <div class="editor-panel">
+          <section class="card page-controls">
+            <h2>Page authority</h2>
+            <label>Status
+              <select id="page-status">
+                <option>NOT_STARTED</option><option>IN_PROGRESS</option><option>COMPLETED</option><option>REVIEWED</option>
+              </select>
+            </label>
+            <label><input id="page-confirmed" type="checkbox"> Human confirmed page</label>
+            <button id="confirm-all" class="danger">Confirm all current items and mark REVIEWED</button>
+            <button id="validate-page">Validate</button>
+            <pre id="validation"></pre>
+          </section>
+          <section class="card">
+            <div class="section-title"><h2>Blocks</h2><button id="delete-block">Delete selected</button></div>
+            <div id="block-list" class="entity-list"></div>
+            <div class="form-grid">
+              <label>ID<input id="block-id"></label>
+              <label>Type<select id="block-type"><option>HEADING</option><option>PARAGRAPH</option><option>LIST</option><option>TABLE_CELL</option><option>CAPTION</option><option>OTHER</option></select></label>
+              <label>Order<input id="block-order" type="number" min="0"></label>
+              <label>Section<input id="block-section"></label>
+              <label>Table<input id="block-table"></label>
+              <label>Row<input id="block-row"></label>
+              <label>Column<input id="block-column"></label>
+              <label class="wide">BBox<input id="block-bbox" placeholder="x0,y0,x1,y1"></label>
+            </div>
+            <button id="update-block">Update selected block</button>
+          </section>
+          <section class="card">
+            <div class="section-title"><h2>Table regions</h2><button id="delete-table">Delete selected</button></div>
+            <div id="table-list" class="entity-list"></div>
+          </section>
+          <section class="card">
+            <h2>Rows and columns</h2>
+            <div class="inline-form"><input id="group-id" placeholder="row/column ID"><select id="group-type"><option value="row">Row</option><option value="column">Column</option></select><button id="add-group">Add</button></div>
+            <div id="group-list" class="entity-list"></div>
+          </section>
+          <section class="card">
+            <h2>Relationships</h2>
+            <div class="form-grid">
+              <label>Source<input id="edge-source" list="entity-ids"></label>
+              <label>Target<input id="edge-target" list="entity-ids"></label>
+              <label>Type<select id="edge-type"><option>HEADER_APPLIES_TO</option><option>SECTION_CONTAINS</option><option>TABLE_CONTAINS</option><option>ROW_CONTAINS</option><option>COLUMN_CONTAINS</option><option>CAPTION_DESCRIBES</option><option>AMBIGUOUS</option></select></label>
+              <datalist id="entity-ids"></datalist>
+            </div>
+            <button id="add-edge">Add human-confirmed edge</button>
+            <div id="edge-list" class="entity-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

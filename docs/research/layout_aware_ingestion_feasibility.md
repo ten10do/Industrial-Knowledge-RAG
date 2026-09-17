@@ -198,4 +198,35 @@ Reason: no real human-verifiable ownership gold exists. Synthetic metrics, even 
 
 `HUMAN_LAYOUT_GOLD_ANNOTATION`
 
-Annotate the 40-page DEV worksheet, deliberately add real merged-header, multi-column, cross-page and mixed-layout pages if available, mark uncertain ownership `AMBIGUOUS`, then evaluate both candidates. Do not consume FINAL_GATE until parser/config choices are frozen from DEV results.
+Obtain a qualified private industrial-manual corpus, regenerate the DEV worksheet, deliberately include merged-header, multi-column, cross-page and mixed-layout pages if available, then annotate uncertain ownership as `AMBIGUOUS`. Do not evaluate candidates or consume FINAL_GATE until human DEV Gold is complete and frozen.
+
+## LA-0.5 human annotation workflow
+
+The generic local-only workflow is now implemented. It adds multi-label high-risk page discovery, rendered page previews, blind Candidate A/B overlays, editable blocks/tables/rows/columns/relationships, manual drawing, autosave/resume, annotation validation, DEV Gold canonical digesting and a correction ledger. The browser helper binds only to loopback. Predictions are hidden on first load and remain `human_confirmed=false` when imported.
+
+Annotation schema v2 explicitly requires `REAL_LAYOUT_DEV_GOLD`, `split=DEV`, page status, page-level confirmation and per-item confirmation. The evaluator loader rejects drafts, non-DEV files, digest drift, unreviewed pages and any prediction item that was not explicitly human-confirmed. `AMBIGUOUS` is counted separately and is not converted into an exact ownership edge.
+
+The private inventory was re-audited before annotation. Fifty-four local PDF files were examined. The initial broad discovery pool contained documents with table-like geometry but no industrial-manual authority. A stricter corpus-eligibility gate requires both manual/specification evidence and independent equipment, electrical, mechanical or automation evidence, while excluding obvious personal-profile material. No local PDF passed that gate.
+
+Therefore:
+
+- qualified real documents: 0
+- qualified real DEV pages: 0
+- human-confirmed Gold pages: 0
+- DEV Gold consumed: no
+- FINAL_GATE consumed: no
+- real ownership metrics: not evaluated
+- real structural slices: `REAL_SLICE_NOT_AVAILABLE`
+
+The annotation helper itself was exercised in a real browser: default-hidden predictions, overlay switching, editable-suggestion import, autosave, reload/resume and schema error display all worked. The smoke draft was restored afterward and was not treated as Gold.
+
+Verification after implementing the workflow:
+
+- layout research and annotation tests: 29 passed
+- clean isolated backend suite: 1001 passed, 2 skipped, 5 subtests passed
+- frontend suite: 34 passed across nine files
+- JavaScript syntax check: PASS
+- protected research hashes: 28/28 PASS
+- tracked private artifact audit: PASS, zero paths
+
+Current LA-0.5 status is `HUMAN_ANNOTATION_ACTION_REQUIRED`, with an additional corpus-availability blocker. The owner must place actual private industrial manuals in the external corpus directory, rerun sanitized inventory and workspace preparation, then perform the human review. Parser heuristics and production runtime remain unchanged.

@@ -4,7 +4,7 @@ This index makes the experiment trail discoverable without turning historical ca
 
 ## Layout-aware ingestion feasibility
 
-- [LA-0 Layout-Aware Industrial Document Ingestion](layout_aware_ingestion_feasibility.md) — annotation foundation ready; real human gold required
+- [LA-0/0.5 Layout-Aware Industrial Document Ingestion](layout_aware_ingestion_feasibility.md) — annotation helper ready; qualified private industrial corpus and human DEV Gold required
 
 ## Evidence and identity foundations
 

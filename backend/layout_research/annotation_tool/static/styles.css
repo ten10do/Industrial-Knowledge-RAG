@@ -1,0 +1,50 @@
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #17211b; background: #eef1ec; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px 14px; background: #173c2d; color: white; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 22px; }
+h2 { font-size: 14px; }
+.eyebrow { color: #b9d4c6; font-size: 11px; font-weight: 700; letter-spacing: .12em; margin-bottom: 4px; }
+.privacy-banner { padding: 8px 24px; background: #f4dca1; color: #5a4310; font-size: 13px; }
+main { display: grid; grid-template-columns: 260px 1fr; height: calc(100vh - 104px); }
+aside { overflow: auto; border-right: 1px solid #ccd2ca; background: #f7f8f5; padding: 14px; }
+#page-filter { width: 100%; margin: 10px 0; padding: 8px; border: 1px solid #bac3b9; border-radius: 6px; }
+#page-list { display: grid; gap: 6px; }
+.page-button { width: 100%; text-align: left; padding: 9px; border: 1px solid #d4d9d2; background: white; border-radius: 7px; cursor: pointer; }
+.page-button.active { border-color: #287a55; background: #e6f2eb; }
+.page-button small { display: block; color: #657269; margin-top: 3px; }
+.workspace { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.toolbar { min-height: 50px; padding: 9px 14px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #ccd2ca; background: white; flex-wrap: wrap; }
+button, select, input { font: inherit; }
+button { border: 1px solid #9baa9f; background: #fff; border-radius: 6px; padding: 6px 9px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+.danger { border-color: #a35a4c; color: #7b2c20; }
+.content-grid { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(460px, 1.3fr) minmax(380px, .9fr); }
+.preview-panel, .editor-panel { min-height: 0; overflow: auto; }
+.preview-panel { padding: 18px; background: #d9ddd7; }
+.preview-stage { position: relative; margin: auto; background: white; box-shadow: 0 4px 24px #32483a30; width: min-content; }
+#page-preview { display: block; max-width: min(850px, 58vw); max-height: calc(100vh - 190px); width: auto; height: auto; }
+#overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+.box { fill: #1f9d6824; stroke: #08764a; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; }
+.box.prediction { fill: #e09b2430; stroke: #c57d0a; stroke-dasharray: 5 3; }
+.box.table { fill: #3b6ed51c; stroke: #2b58b8; stroke-width: 2; }
+.box.selected { stroke: #d93428; stroke-width: 3; }
+.editor-panel { padding: 12px; display: grid; gap: 10px; align-content: start; background: #f1f3ef; }
+.card { background: white; border: 1px solid #d3d8d1; border-radius: 8px; padding: 12px; }
+.section-title { display: flex; align-items: center; justify-content: space-between; }
+.page-controls { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.page-controls pre { width: 100%; max-height: 110px; overflow: auto; font-size: 11px; background: #f5f6f4; padding: 7px; }
+.entity-list { display: grid; gap: 4px; margin: 8px 0; max-height: 170px; overflow: auto; }
+.entity-row { display: flex; gap: 6px; align-items: center; border-bottom: 1px solid #edf0eb; padding: 4px; font-size: 12px; cursor: pointer; }
+.entity-row.selected { background: #e5f1ea; }
+.entity-row .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.form-grid label, .page-controls label { font-size: 11px; color: #4b5a50; }
+.form-grid input, .form-grid select { width: 100%; display: block; padding: 5px; border: 1px solid #c3cbc2; border-radius: 4px; }
+.wide { grid-column: 1 / -1; }
+.inline-form { display: flex; gap: 6px; margin-top: 8px; }
+.inline-form input { flex: 1; }
+.save-state { font-size: 12px; }
+.tag { display: inline-block; background: #e5ece7; color: #415247; border-radius: 999px; padding: 2px 7px; margin-right: 4px; font-size: 11px; }
+@media (max-width: 1000px) { main { grid-template-columns: 210px 1fr; } .content-grid { grid-template-columns: 1fr; } #page-preview { max-width: 70vw; } }
