@@ -313,3 +313,32 @@ Frontend suite: 34 passed. Protected research hashes: 28/28 PASS. Parser
 semantic diff relative to the phase start commit: zero. No Gold was
 created automatically and nothing was frozen or pushed. Status remains
 `OWNER_HUMAN_LAYOUT_ANNOTATION_REQUIRED`.
+
+## LA-0.7b authority correction: structure vs ownership
+
+Owner review of LA-0.7 identified a Gold authority risk: the bulk table
+confirmation also confirmed ownership relationships. The semantics are now
+strictly separated. `accept_table_structure` only marks the table region,
+its row/column groups and member blocks, and records
+`authority.table_structure_status`; it can never touch relationships or
+`authority.ownership_status`. The guard
+`STRUCTURE_ACCEPTANCE_CANNOT_AUTHORIZE_OWNERSHIP` is hardcoded in the
+annotation server and asserted by tests.
+
+Ownership enters Gold only through explicit owner actions: single-edge
+confirmation, low-risk bulk confirmation (unchanged, owner-clicked), or
+ownership bundle confirmation. A bundle is one header applying to a set of
+values (a single interpretable rule); the server rejects bundles that mix
+sources or risk classifications, and AMBIGUOUS relations can never be
+accepted through a bundle. Bundle actions support accept / reject /
+ambiguous and are exactly undoable through a logged
+`restore_ownership_state` operation. The page completion gate now requires
+table structures reviewed AND ownership explicitly confirmed AND AMBIGUOUS
+explicitly handled; a rejected REVIEWED payload never overwrites the draft.
+
+All 59 annotation drafts were verified clean (no structure-acceptance
+contamination existed), so no migration was required. Mutation tests A-J
+plus the authority guard pass; the layout suites count 65 passing tests;
+backend 1,037 passed / 0 failed. The DEV sample, manifest digest, reserve
+manuals and parser semantics are unchanged. Status remains
+`OWNER_HUMAN_LAYOUT_ANNOTATION_REQUIRED`.

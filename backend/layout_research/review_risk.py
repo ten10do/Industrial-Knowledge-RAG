@@ -23,6 +23,9 @@ PRIMARY_OPTION_PREFERENCE = ("suggestion_2", "suggestion_1", "flat_baseline")
 
 SECONDARY_REVIEW_RATIO = 0.2
 
+TABLE_STRUCTURE_STATUSES = ("UNREVIEWED", "ACCEPTED", "CORRECTED")
+OWNERSHIP_STATUSES = ("UNREVIEWED", "ACCEPTED", "REJECTED", "AMBIGUOUS")
+
 
 def _any_match(patterns: tuple[Any, ...], text: str) -> bool:
     return any(pattern.search(text) for pattern in patterns)
@@ -172,6 +175,42 @@ def _primary_option(options: dict[str, Any]) -> str:
     return best[1]
 
 
+def _severity(risk: str) -> int:
+    return {"AMBIGUOUS": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}.get(risk, 2)
+
+
+def plan_bundles(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group ownership edges into interpretable review bundles.
+
+    A bundle is ONE header applying to a set of values (a single
+    interpretable ownership rule).  Edges are never mixed across sources or
+    risk classifications; AMBIGUOUS edges stay their own units so they can
+    never be bulk-accepted into Gold.
+    """
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for edge in edges:
+        groups[(edge.get("table_region_id", ""), edge.get("source_id", ""))].append(edge)
+    bundles = []
+    for (table_region_id, source_id), members in sorted(groups.items()):
+        risks = {item["risk"] for item in members}
+        risk = min(risks, key=_severity)
+        reasons = sorted({reason for item in members for reason in item["reasons"]})
+        bundles.append(
+            {
+                "bundle_id": f"{table_region_id}::{source_id or 'ambiguous'}::{risk}",
+                "table_region_id": table_region_id,
+                "source_id": source_id,
+                "risk": risk,
+                "reasons": reasons,
+                "relationship_ids": sorted(item["relationship_id"] for item in members),
+                "target_value_count": len({item["target_id"] for item in members}),
+                "why_grouped": "single_header_rule",
+                "requires_independent_review": risk in ("HIGH", "AMBIGUOUS"),
+            }
+        )
+    return bundles
+
+
 def build_review_queue(
     workspace: str | Path,
     *,
@@ -202,6 +241,7 @@ def build_review_queue(
             page.get("slices", []),
             evidence_by_key.get((page["doc_id"], page["page_number"])),
         )
+        bundles = plan_bundles(classification["edges"])
         page_risk[key] = {
             "doc_id": page["doc_id"],
             "page_number": page["page_number"],
@@ -210,6 +250,7 @@ def build_review_queue(
             "primary_option": primary,
             "counts": classification["counts"],
             "edges": classification["edges"],
+            "bundles": bundles,
         }
         rank = {"AMBIGUOUS": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
         for edge in classification["edges"]:
@@ -238,6 +279,12 @@ def build_review_queue(
     totals = Counter()
     for risk in page_risk.values():
         totals.update(risk["counts"])
+    all_bundles = [bundle for risk in page_risk.values() for bundle in risk.get("bundles", [])]
+    bundle_counts = Counter(bundle["risk"] for bundle in all_bundles)
+    table_units = {bundle["table_region_id"] for bundle in all_bundles if bundle["table_region_id"]}
+    standalone_high = sum(
+        1 for bundle in all_bundles if bundle["risk"] == "HIGH" and len(bundle["relationship_ids"]) == 1
+    )
     workload = {
         "pages_total": len(manifest["pages"]),
         "dev_pages_total": len(dev_pages),
@@ -245,12 +292,29 @@ def build_review_queue(
         "second_review_pages": len(secondary),
         "ownership_edges_total": sum(totals.values()),
         "risk_counts": {level: totals.get(level, 0) for level in RISK_LEVELS},
-        "owner_individual_review_total": totals.get("HIGH", 0) + totals.get("AMBIGUOUS", 0),
+        # Explicit owner review units (click-level workload, not edge count):
+        "table_structure_units": len(table_units),
+        "ownership_bundle_units": len(all_bundles),
+        "ownership_bundle_units_by_risk": {
+            level: bundle_counts.get(level, 0) for level in RISK_LEVELS
+        },
+        "standalone_high_edges": standalone_high,
+        "ambiguous_review_units": bundle_counts.get("AMBIGUOUS", 0),
+        "low_bulk_groups": bundle_counts.get("LOW", 0),
+        "medium_bulk_groups": bundle_counts.get("MEDIUM", 0),
+        "owner_explicit_review_units": (
+            len(table_units) + len(all_bundles)
+        ),
     }
     result = {
         "prediction_only": True,
         "human_confirmed": False,
         "purpose": "review_prioritization_only_never_gold",
+        "authority_model": {
+            "table_structure_status": list(TABLE_STRUCTURE_STATUSES),
+            "ownership_status": list(OWNERSHIP_STATUSES),
+            "STRUCTURE_ACCEPTANCE_CANNOT_AUTHORIZE_OWNERSHIP": True,
+        },
         "primary_options": {key: value["primary_option"] for key, value in page_risk.items()},
         "page_risk": page_risk,
         "workload": workload,

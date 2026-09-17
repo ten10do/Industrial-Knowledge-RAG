@@ -153,20 +153,28 @@ def test_reviewed_gate_requires_recorded_owner_action(server):
     assert any("no owner action" in error for error in result["validation"]["errors"])
 
 
-def test_accept_table_structure_then_reviewed_passes(server):
+def test_full_authority_path_to_reviewed(server):
+    """Structure accept → LOW bulk → HIGH bundle → REVIEWED passes."""
     root, base = server
-    bulk = _post(f"{base}/api/bulk?key=doc_002_p0001",
-                 {"operation": "accept_table_structure", "table_region_id": "t1", "owner_clicked": True})
-    assert bulk["saved"] is True
-    assert set(bulk["affected"]) == {"t1", "h1", "h2", "v1", "r_low", "r_high"}
+    structure = _post(f"{base}/api/bulk?key=doc_002_p0001",
+                      {"operation": "accept_table_structure", "table_region_id": "t1", "owner_clicked": True})
+    assert structure["saved"] is True
     stored = json.loads((root / "annotations" / "doc_002_p0001.json").read_text(encoding="utf-8"))
-    assert all(item["human_confirmed"] for item in stored["table_regions"])
+    assert all(edge["human_confirmed"] is False for edge in stored["relationships"]), (
+        "structure acceptance must never confirm ownership edges"
+    )
+    assert stored["authority"]["table_structure_status"]["t1"] == "ACCEPTED"
+    low = _post(f"{base}/api/bulk?key=doc_002_p0001",
+                {"operation": "accept_low_risk_ownership", "table_region_id": "t1", "owner_clicked": True})
+    assert low["affected"] == ["r_low"]
+    bundle = _post(f"{base}/api/bulk?key=doc_002_p0001",
+                   {"operation": "accept_ownership_bundle", "relationship_ids": ["r_high"], "owner_clicked": True})
+    assert bundle["saved"] is True
+    stored = json.loads((root / "annotations" / "doc_002_p0001.json").read_text(encoding="utf-8"))
     assert all(edge["human_confirmed"] for edge in stored["relationships"])
-    operations = stored["audit"]["operations"]
-    assert operations and operations[-1]["operation"] == "accept_table_structure"
     annotation = dict(stored, status="REVIEWED", human_confirmed=True, owner_clicked=True)
     result = _post(f"{base}/api/save?key=doc_002_p0001", annotation)
-    assert result["saved"] is True
+    assert result["saved"] is True, result
 
 
 def test_bulk_requires_explicit_owner_click(server):

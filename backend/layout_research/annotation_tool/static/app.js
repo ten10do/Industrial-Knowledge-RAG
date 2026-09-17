@@ -246,11 +246,99 @@ function edgeFilterActive(edge, riskEntry) {
   return true;
 }
 
+function ownershipStatus(relationshipId) {
+  return state.annotation.authority?.ownership_status?.[relationshipId] || 'UNREVIEWED';
+}
+
 function renderOwnership() {
   if (!state.annotation || state.mode !== 'OWNERSHIP_RISK_REVIEW') return;
   const meta = pageMeta(state.page.key);
   const counts = meta?.counts || {};
   $('ownership-counts').innerHTML = ['HIGH', 'MEDIUM', 'LOW', 'AMBIGUOUS'].map(level => `<div class="count-item"><span>${level}</span><strong>${counts[level] || 0}</strong></div>`).join('');
+  renderBundles(meta);
+  renderEdgeList(meta);
+}
+
+function renderBundles(meta) {
+  const bundles = meta?.bundles || [];
+  if (!bundles.length) {
+    $('bundle-list-high').innerHTML = '<p class="hint">No bundles. Import a suggestion first; predictions stay hidden until you enable them.</p>';
+    $('bundle-list-ordinary').innerHTML = '';
+    return;
+  }
+  const card = bundle => {
+    const statuses = bundle.relationship_ids.map(id => ownershipStatus(id));
+    const allReviewed = statuses.every(status => status !== 'UNREVIEWED');
+    const node = document.createElement('div');
+    node.className = `table-review risk-border-${bundle.risk}`;
+    node.innerHTML = `
+      <div class="table-head"><strong>${bundle.source_id || 'AMBIGUOUS source'}</strong><span class="tag risk-${bundle.risk}">${bundle.risk}</span><span>${allReviewed ? '✓ reviewed' : 'pending'}</span></div>
+      <div class="table-stats">rule: header → ${bundle.target_value_count} values · edges ${bundle.relationship_ids.length}</div>
+      <div class="table-stats">why: ${bundle.reasons.join(', ') || 'single confident header'}</div>
+      <div class="inline-buttons">
+        <button class="accept-bundle">ACCEPT BUNDLE</button>
+        <button class="reject-bundle">REJECT BUNDLE</button>
+        <button class="ambiguous-bundle">AMBIGUOUS BUNDLE</button>
+        <button class="edit-bundle">EDIT</button>
+      </div>
+      <div class="bundle-edges hidden"></div>`;
+    node.querySelector('.accept-bundle').onclick = () => bundleOperation('accept_ownership_bundle', bundle);
+    node.querySelector('.reject-bundle').onclick = () => bundleOperation('reject_ownership_bundle', bundle);
+    node.querySelector('.ambiguous-bundle').onclick = () => bundleOperation('ambiguous_ownership_bundle', bundle);
+    node.querySelector('.edit-bundle').onclick = () => {
+      const panel = node.querySelector('.bundle-edges');
+      panel.classList.toggle('hidden');
+      if (!panel.classList.contains('hidden') && !panel.children.length) {
+        panel.replaceChildren(...bundle.relationship_ids.map(id => {
+          const edgeRow = document.createElement('div');
+          edgeRow.className = 'entity-row';
+          edgeRow.innerHTML = `<span class="grow">${id}</span><span>${ownershipStatus(id)}</span>`;
+          edgeRow.onclick = () => { state.currentEdgeId = id; edgeRow.scrollIntoView({ block: 'center' }); };
+          return edgeRow;
+        }));
+      }
+    };
+    return node;
+  };
+  const highBundles = bundles.filter(bundle => bundle.requires_independent_review);
+  const ordinaryBundles = bundles.filter(bundle => !bundle.requires_independent_review);
+  $('bundle-list-high').replaceChildren(...(highBundles.length ? highBundles.map(card) : []));
+  if (!highBundles.length) $('bundle-list-high').innerHTML = '<p class="hint">No high-risk bundles on this page.</p>';
+  $('bundle-list-ordinary').replaceChildren(...(ordinaryBundles.length ? ordinaryBundles.map(card) : []));
+  if (!ordinaryBundles.length) $('bundle-list-ordinary').innerHTML = '<p class="hint">No ordinary bundles on this page.</p>';
+}
+
+async function bundleOperation(operation, bundle) {
+  setSaveState(`Applying ${operation}…`);
+  try {
+    const result = await getJSON(`/api/bulk?key=${encodeURIComponent(state.page.key)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation, relationship_ids: bundle.relationship_ids, owner_clicked: true }),
+    });
+    if (result.saved === false) throw new Error(JSON.stringify(result.validation?.errors || result.error || 'rejected'));
+    const prior = result.prior_state || {};
+    if (Object.keys(prior).length) {
+      pushUndo({
+        label: `${operation} (${bundle.relationship_ids.length} edges)`,
+        undo: () => restoreOwnershipState(prior),
+      });
+    }
+    await loadPage(state.page.key);
+    setSaveState(`${operation} · ${result.affected?.length ?? 0} edges`);
+  } catch (error) { setSaveState(`Bundle failed: ${error.message}`); }
+}
+
+async function restoreOwnershipState(prior) {
+  try {
+    await getJSON(`/api/bulk?key=${encodeURIComponent(state.page.key)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'restore_ownership_state', prior_state: prior, owner_clicked: true }),
+    });
+    await loadPage(state.page.key);
+  } catch (error) { setSaveState(`Undo failed: ${error.message}`); }
+}
+
+function renderEdgeList(meta) {
   if (!state.annotation.relationships.length) {
     $('edge-review-list').innerHTML = '<p class="hint">No imported relations yet. Open PAGE_OVERVIEW and import a suggestion first; predictions stay hidden until you enable them.</p>';
     return;
@@ -268,7 +356,7 @@ function renderOwnership() {
       <strong>${edge.relationship_type}</strong>
       <span class="grow">${edge.source_id || '∅'} → ${edge.target_id}</span>
       <span class="reasons">${(riskEntry?.reasons || []).join(', ')}</span>
-      <span>${edge.human_confirmed ? '✓' : 'pending'}</span>
+      <span>${ownershipStatus(edge.relationship_id)}</span>
       <div class="inline-buttons">
         <button class="accept" title="Accept (A)">✓</button>
         <button class="reject" title="Reject (R)">✗</button>

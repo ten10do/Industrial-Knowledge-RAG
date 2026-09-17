@@ -18,7 +18,30 @@ from ..annotation import validate_page_annotation
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 PAGE_KEY = re.compile(r"^doc_[0-9]{3}_p[0-9]{4}$")
-BULK_OPERATIONS = {"accept_table_structure", "accept_low_risk_ownership"}
+
+# Gold authority guard: accepting table structure (region, rows, columns,
+# membership) must never authorize header→value ownership.  Ownership enters
+# Gold only through explicit owner actions on relationships or bundles.
+# Hardcoded here and asserted in backend/test_layout_authority.py so that
+# regressions fail tests instead of contaminating Gold silently.
+STRUCTURE_ACCEPTANCE_CANNOT_AUTHORIZE_OWNERSHIP = True
+
+TABLE_STRUCTURE_STATUSES = ("UNREVIEWED", "ACCEPTED", "CORRECTED")
+OWNERSHIP_STATUSES = ("UNREVIEWED", "ACCEPTED", "REJECTED", "AMBIGUOUS")
+
+BULK_OPERATIONS = {
+    "accept_table_structure",
+    "accept_low_risk_ownership",
+    "accept_ownership_bundle",
+    "reject_ownership_bundle",
+    "ambiguous_ownership_bundle",
+    "restore_ownership_state",
+}
+OWNERSHIP_BUNDLE_OPERATIONS = {
+    "accept_ownership_bundle",
+    "reject_ownership_bundle",
+    "ambiguous_ownership_bundle",
+}
 
 
 class AnnotationHandler(SimpleHTTPRequestHandler):
@@ -109,7 +132,11 @@ class AnnotationHandler(SimpleHTTPRequestHandler):
                         "primary_options": review.get("primary_options", {}),
                         "second_review_queue": review.get("second_review_queue", []),
                         "page_risk": {
-                            key: {"counts": value["counts"], "edges": value["edges"]}
+                            key: {
+                                "counts": value["counts"],
+                                "edges": value["edges"],
+                                "bundles": value.get("bundles", []),
+                            }
                             for key, value in review.get("page_risk", {}).items()
                         },
                         "review_queue": review.get("review_queue", []),
@@ -206,9 +233,13 @@ class AnnotationHandler(SimpleHTTPRequestHandler):
         risk_by_edge = {
             edge["relationship_id"]: edge for edge in page_risk.get("edges", [])
         }
+        authority = self._authority(annotation)
         affected: list[str] = []
         stamp = datetime.now(timezone.utc).isoformat()
+        prior_state: dict[str, dict] = {}
         if operation == "accept_table_structure":
+            if not STRUCTURE_ACCEPTANCE_CANNOT_AUTHORIZE_OWNERSHIP:
+                raise RuntimeError("authority guard must be enabled")
             table_id = payload.get("table_region_id", "")
             if not table_id:
                 raise ValueError("table_region_id is required")
@@ -229,21 +260,42 @@ class AnnotationHandler(SimpleHTTPRequestHandler):
                 if block.get("table_region_id") == table_id and not block.get("human_confirmed"):
                     block["human_confirmed"] = True
                     affected.append(block["block_id"])
-            for edge in annotation.get("relationships", []):
-                if edge.get("table_region_id") == table_id and not edge.get("human_confirmed"):
-                    edge["human_confirmed"] = True
-                    affected.append(edge["relationship_id"])
-        else:  # accept_low_risk_ownership
-            table_id = payload.get("table_region_id", "")
-            for edge in annotation.get("relationships", []):
-                risk_entry = risk_by_edge.get(edge.get("relationship_id"))
-                if risk_entry is None or risk_entry["risk"] != "LOW":
-                    continue
-                if table_id and edge.get("table_region_id") != table_id:
-                    continue
-                if not edge.get("human_confirmed"):
-                    edge["human_confirmed"] = True
-                    affected.append(edge["relationship_id"])
+            # Authority boundary: relationships and ownership_status are NOT
+            # touched here.  Structure acceptance never authorizes ownership.
+            status = "CORRECTED" if payload.get("corrected") else "ACCEPTED"
+            authority["table_structure_status"][table_id] = status
+            affected.append(f"table_structure_status:{table_id}:{status}")
+        elif operation == "restore_ownership_state":
+            prior_state = payload.get("prior_state", {})
+            if not isinstance(prior_state, dict) or not prior_state:
+                raise ValueError("restore_ownership_state requires prior_state")
+            edges_by_id = {
+                edge.get("relationship_id"): edge for edge in annotation.get("relationships", [])
+            }
+            for relationship_id, snapshot in prior_state.items():
+                edge = edges_by_id.get(relationship_id)
+                if edge is not None:
+                    edge["human_confirmed"] = bool(snapshot.get("human_confirmed", False))
+                    edge["relationship_type"] = snapshot.get("relationship_type", edge["relationship_type"])
+                authority["ownership_status"][relationship_id] = snapshot.get("ownership_status", "UNREVIEWED")
+                affected.append(relationship_id)
+        else:
+            if operation == "accept_low_risk_ownership":
+                table_id = payload.get("table_region_id", "")
+                for edge in annotation.get("relationships", []):
+                    risk_entry = risk_by_edge.get(edge.get("relationship_id"))
+                    if risk_entry is None or risk_entry["risk"] != "LOW":
+                        continue
+                    if table_id and edge.get("table_region_id") != table_id:
+                        continue
+                    if not edge.get("human_confirmed"):
+                        edge["human_confirmed"] = True
+                        authority["ownership_status"][edge["relationship_id"]] = "ACCEPTED"
+                        affected.append(edge["relationship_id"])
+            else:
+                affected = self._apply_ownership_bundle(
+                    annotation, authority, payload, operation, risk_by_edge, prior_state
+                )
         if not affected:
             self._json({"saved": True, "affected": [], "message": "nothing to accept"})
             return
@@ -258,12 +310,100 @@ class AnnotationHandler(SimpleHTTPRequestHandler):
             }
         )
         result = self._write_annotation(key, annotation, owner_action=True)
+        if operation in OWNERSHIP_BUNDLE_OPERATIONS or operation == "restore_ownership_state":
+            result["prior_state"] = prior_state
         self._json({**result, "affected": affected})
+
+    @staticmethod
+    def _authority(annotation: dict) -> dict:
+        authority = annotation.get("authority")
+        if not isinstance(authority, dict):
+            authority = {"table_structure_status": {}, "ownership_status": {}}
+        authority.setdefault("table_structure_status", {})
+        authority.setdefault("ownership_status", {})
+        annotation["authority"] = authority
+        return authority
+
+    def _apply_ownership_bundle(
+        self,
+        annotation: dict,
+        authority: dict,
+        payload: dict,
+        operation: str,
+        risk_by_edge: dict[str, dict],
+        prior_state: dict[str, dict],
+    ) -> list[str]:
+        """Apply an explicit ownership bundle action.
+
+        Bundle rules enforced server-side:
+        - every listed relationship must exist in the annotation
+        - all edges must share ONE source header (single interpretable rule)
+        - all edges must share ONE risk classification (no mixing of
+          merged-header/unit/model/cross-page/etc. with ordinary edges)
+        - AMBIGUOUS-classified edges can never be ACCEPTED through a bundle
+        """
+        requested = payload.get("relationship_ids", [])
+        if not isinstance(requested, list) or not requested:
+            raise ValueError("relationship_ids is required for bundle operations")
+        edges_by_id = {
+            edge.get("relationship_id"): edge for edge in annotation.get("relationships", [])
+        }
+        missing = [rid for rid in requested if rid not in edges_by_id]
+        if missing:
+            raise ValueError(f"unknown relationship ids: {missing[:5]}")
+        sources = {
+            edges_by_id[rid].get("source_id", "") for rid in requested
+        }
+        if len(sources) != 1:
+            raise ValueError("bundle edges must share a single source header")
+        risks = {
+            (risk_by_edge.get(rid) or {}).get("risk", "MEDIUM") for rid in requested
+        }
+        if len(risks) != 1:
+            raise ValueError("bundle edges must share a single risk classification")
+        risk = risks.pop()
+        if operation == "accept_ownership_bundle" and risk == "AMBIGUOUS":
+            raise ValueError(
+                "AMBIGUOUS relations cannot be accepted through a bundle; resolve them individually"
+            )
+        affected: list[str] = []
+        new_status = {
+            "accept_ownership_bundle": "ACCEPTED",
+            "reject_ownership_bundle": "REJECTED",
+            "ambiguous_ownership_bundle": "AMBIGUOUS",
+        }[operation]
+        for rid in requested:
+            edge = edges_by_id[rid]
+            prior_state[rid] = {
+                "human_confirmed": bool(edge.get("human_confirmed", False)),
+                "relationship_type": edge.get("relationship_type", ""),
+                "ownership_status": authority["ownership_status"].get(rid, "UNREVIEWED"),
+            }
+            if operation == "accept_ownership_bundle":
+                edge["human_confirmed"] = True
+            elif operation == "reject_ownership_bundle":
+                edge["human_confirmed"] = True  # rejection confirms the edge is NOT gold
+                edge["relationship_type"] = "AMBIGUOUS"
+            else:  # ambiguous_ownership_bundle
+                edge["relationship_type"] = "AMBIGUOUS"
+                edge["human_confirmed"] = True  # confirming the ambiguity is explicit
+            authority["ownership_status"][rid] = new_status
+            affected.append(rid)
+        return affected
 
     # ------------------------------------------------------- gates + dashboards
     def _reviewed_gate(self, key: str, annotation: dict) -> dict:
-        """Page completion gate: tables reviewed, HIGH resolved, AMBIGUOUS explicit."""
+        """Page completion gate.
+
+        REVIEWED requires: table structures reviewed AND required ownership
+        (HIGH/AMBIGUOUS relations) resolved through explicit owner actions AND
+        AMBIGUOUS explicitly handled AND page-level human confirmation.  A
+        table structure acceptance alone can never complete ownership.
+        """
         page_risk = self._page_risk(key)
+        authority = self._authority(annotation)
+        structure_status = authority["table_structure_status"]
+        ownership_status = authority["ownership_status"]
         violations: list[str] = []
         if not annotation.get("human_confirmed"):
             violations.append("page human_confirmed must be set by explicit owner action")
@@ -271,6 +411,32 @@ class AnnotationHandler(SimpleHTTPRequestHandler):
         if not audit.get("prediction_imported") and not audit.get("operations"):
             violations.append("no owner action recorded for this page")
         if page_risk:
+            primary = page_risk.get("primary_option", "")
+            option_tables: list[str] = []
+            if primary:
+                try:
+                    prediction = self._read_json(
+                        next(page["prediction"] for page in self._read_json("workspace_manifest.json")["pages"] if page["key"] == key)
+                    )
+                    option_tables = [
+                        table["table_region_id"]
+                        for table in prediction.get("options", {}).get(primary, {}).get("table_regions", [])
+                    ]
+                except (OSError, StopIteration, json.JSONDecodeError, KeyError):
+                    option_tables = []
+            confirmed_tables = {
+                table["table_region_id"]
+                for table in annotation.get("table_regions", [])
+                if table.get("human_confirmed")
+            }
+            for table_id in option_tables:
+                status = structure_status.get(table_id, "")
+                if status in ("ACCEPTED", "CORRECTED"):
+                    continue
+                if not status and table_id in confirmed_tables:
+                    # Legacy draft confirmed before authority split.
+                    continue
+                violations.append(f"table structure not reviewed: {table_id}")
             counts = page_risk.get("counts", {})
             if counts.get("HIGH", 0) + counts.get("AMBIGUOUS", 0) > 0:
                 edges_by_id = {
@@ -286,6 +452,11 @@ class AnnotationHandler(SimpleHTTPRequestHandler):
                         continue  # explicitly marked ambiguous
                     if not current.get("human_confirmed"):
                         violations.append(f"unresolved {edge['risk']} relation {edge['relationship_id']}")
+                        continue
+                    if ownership_status.get(edge["relationship_id"], "UNREVIEWED") == "UNREVIEWED":
+                        violations.append(
+                            f"ownership not explicitly confirmed: {edge['relationship_id']}"
+                        )
         return {"passed": not violations, "violations": violations}
 
     def _workload(self) -> dict:
