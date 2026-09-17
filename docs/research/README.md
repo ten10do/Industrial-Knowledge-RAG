@@ -2,6 +2,10 @@
 
 This index makes the experiment trail discoverable without turning historical candidates into current feature claims. Current status is defined by [Feature Status](../../FEATURE_STATUS.md), [Research Decisions](../../RESEARCH_DECISIONS.md), and the latest release manifest.
 
+## Layout-aware ingestion feasibility
+
+- [LA-0 Layout-Aware Industrial Document Ingestion](layout_aware_ingestion_feasibility.md) — annotation foundation ready; real human gold required
+
 ## Evidence and identity foundations
 
 - [V3.33 Independent Mixed-Evidence Generalization](../../backend/evaluation/V333_INDEPENDENT_MIXED_EVIDENCE_GENERALIZATION.md)

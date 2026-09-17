@@ -1,0 +1,18 @@
+{
+  "audit_date": "2026-09-17",
+  "production_requirements_changed": false,
+  "packages": [
+    {"package": "pypdf", "version": "6.16.2", "license": "BSD-3-Clause", "reason": "Candidate A text operators and coordinates", "production_suitability": "already production-pinned"},
+    {"package": "pdfplumber", "version": "0.11.10", "license": "MIT", "reason": "Candidate B independent table-region detector", "production_suitability": "research-only pending real-data gate"},
+    {"package": "pdfminer.six", "version": "20260107", "license": "MIT", "reason": "pdfplumber layout engine", "production_suitability": "research-only transitive dependency"},
+    {"package": "Pillow", "version": "12.3.0", "license": "MIT-CMU", "reason": "pdfplumber research dependency", "production_suitability": "research-only transitive dependency"},
+    {"package": "pypdfium2", "version": "5.13.0", "license": "BSD-3-Clause / Apache-2.0", "reason": "pdfplumber rendering dependency", "production_suitability": "research-only transitive dependency"},
+    {"package": "cryptography", "version": "50.0.1", "license": "Apache-2.0 OR BSD-3-Clause", "reason": "pdfminer encrypted-PDF dependency", "production_suitability": "research-only transitive dependency"},
+    {"package": "cffi", "version": "2.1.1", "license": "MIT-0", "reason": "cryptography dependency", "production_suitability": "research-only transitive dependency"},
+    {"package": "pycparser", "version": "3.0", "license": "BSD-3-Clause", "reason": "cffi dependency", "production_suitability": "research-only transitive dependency"},
+    {"package": "charset-normalizer", "version": "3.5.1", "license": "MIT", "reason": "pdfminer dependency", "production_suitability": "research-only transitive dependency"}
+  ],
+  "excluded": [
+    {"package": "PyMuPDF", "reason": "not installed; prior AGPL/commercial licensing concern remains out of scope"}
+  ]
+}
