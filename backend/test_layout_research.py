@@ -145,6 +145,50 @@ def test_mutation_wrong_header_and_swapped_value_are_detected():
     assert report["error_taxonomy"]["HEADER_MISBIND"] >= 1
 
 
+def test_ownership_diagnostics_are_exact_and_deterministic():
+    gold = gold_page(_case("two_column_specification"))
+    report = _evaluate(gold, gold)
+    diagnostics = report["ownership_diagnostics"]
+    assert diagnostics["metrics"]["row_header_ownership_precision"] == 1.0
+    assert diagnostics["metrics"]["column_header_ownership_precision"] == 1.0
+    assert sum(diagnostics["misbind_taxonomy"].values()) == 0
+
+
+def test_unit_and_model_misbinds_are_counted_separately():
+    gold = gold_page(_case("two_column_specification"))
+    target = gold.relationships[0].value_block_id
+    wrong_source = next(
+        cell.cell_id for cell in gold.cells
+        if cell.cell_id not in {edge.header_block_id for edge in gold.relationships}
+    )
+    cells = tuple(
+        replace(cell, text="V" if cell.cell_id == wrong_source else cell.text)
+        for cell in gold.cells
+    )
+    unit_edge = HeaderRelationship(
+        relationship_id="unit-misbind",
+        header_block_id=wrong_source,
+        value_block_id=target,
+        relationship_type="HEADER_APPLIES_TO",
+        page_number=gold.page_number,
+        table_region_id=gold.table_regions[0].table_region_id,
+    )
+    unit_report = _evaluate(gold, replace(gold, cells=cells, relationships=gold.relationships + (unit_edge,)))
+    assert unit_report["error_taxonomy"]["UNIT_MISBIND"] == 1
+    assert unit_report["ownership_diagnostics"]["counts"]["UNIT"]["false"] == 1
+
+    model_cells = tuple(
+        replace(cell, text="Model-A1" if cell.cell_id == wrong_source else cell.text)
+        for cell in gold.cells
+    )
+    model_report = _evaluate(
+        gold,
+        replace(gold, cells=model_cells, relationships=gold.relationships + (replace(unit_edge, relationship_id="model-misbind"),)),
+    )
+    assert model_report["error_taxonomy"]["MODEL_COLUMN_MISBIND"] == 1
+    assert model_report["ownership_diagnostics"]["counts"]["MODEL_COLUMN"]["false"] == 1
+
+
 def test_mutation_missing_and_extra_ownership_are_detected():
     gold = gold_page(_case("two_column_specification"))
     missing = replace(gold, relationships=gold.relationships[1:])

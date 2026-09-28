@@ -3,10 +3,46 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import re
 from typing import Iterable
 
 from .geometry import intersection_over_union
 from .models import DocumentLayout, LayoutBlock, PageLayout, TableCell, to_dict
+
+
+UNIT_HEADER_PATTERN = re.compile(
+    r"^(?:%|a|bar|degc|hz|in|kg|kw|lb|m|ma|mm|ms|nm|rpm|s|v|vac|vdc|w)$",
+    re.I,
+)
+MODEL_HEADER_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*\d)[a-z0-9][a-z0-9+./_-]{1,31}$", re.I)
+PARAMETER_CODE_PATTERN = re.compile(r"^[a-z]\d{2,4}$", re.I)
+OWNERSHIP_DIAGNOSTIC_TYPES = (
+    "UNIT",
+    "MODEL_COLUMN",
+    "MERGED_HEADER",
+    "ROW_HEADER",
+    "CROSS_PAGE",
+    "MULTI_LEVEL_HEADER",
+    "COLUMN_HEADER",
+    "OTHER",
+)
+OWNERSHIP_MISBIND_TYPES = (
+    "OVER_BROAD_COLUMN_HEADER",
+    "WRONG_PARENT_HEADER",
+    "MERGED_HEADER_OVER_PROPAGATION",
+    "UNIT_HEADER_MISBIND",
+    "MODEL_COLUMN_MISBIND",
+    "ROW_HEADER_MISBIND",
+    "CROSS_COLUMN_MISBIND",
+    "CROSS_PAGE_CONTEXT_LEAK",
+    "MULTI_LEVEL_HEADER_ERROR",
+    "SPANNING_HEADER_ERROR",
+    "PARAMETER_CODE_MISBIND",
+    "FAULT_CODE_CAUSE_ACTION_MISBIND",
+    "DUPLICATE_HEADER_AMBIGUITY",
+    "GEOMETRY_OVERLAP_AMBIGUITY",
+    "OTHER",
+)
 
 
 FROZEN_GATES = {
@@ -73,6 +109,207 @@ def _ownership_edges(page: PageLayout) -> set[tuple[str, str]]:
         for edge in page.relationships
         if edge.relationship_type == "HEADER_APPLIES_TO"
     }
+
+
+def _cell_by_id(page: PageLayout) -> dict[str, TableCell]:
+    return {cell.cell_id: cell for cell in page.cells}
+
+
+def _normalized_header_text(text: str) -> str:
+    return re.sub(r"[°\s()]", "", text).casefold()
+
+
+def _is_unit_header(text: str) -> bool:
+    return bool(UNIT_HEADER_PATTERN.fullmatch(_normalized_header_text(text)))
+
+
+def _is_model_header(text: str) -> bool:
+    normalized = _normalized_header_text(text)
+    return bool(MODEL_HEADER_PATTERN.fullmatch(normalized)) and not bool(
+        PARAMETER_CODE_PATTERN.fullmatch(normalized)
+    )
+
+
+def _ownership_axes(
+    source: TableCell,
+    target: TableCell,
+    *,
+    incoming_count: int,
+    page_number: int,
+) -> set[str]:
+    axes: set[str] = set()
+    if source.page_number != target.page_number or source.page_number != page_number:
+        return {"CROSS_PAGE"}
+    if _is_unit_header(source.text):
+        axes.add("UNIT")
+    if _is_model_header(source.text):
+        axes.add("MODEL_COLUMN")
+    if source.row_id == target.row_id and source.bbox.x0 <= target.bbox.x0:
+        axes.add("ROW_HEADER")
+    if source.bbox.y1 <= target.bbox.y0 + 1 and source.bbox.width > target.bbox.width * 1.5:
+        axes.add("MERGED_HEADER")
+    if incoming_count > 1 and source.bbox.y1 <= target.bbox.y0 + 1:
+        axes.add("MULTI_LEVEL_HEADER")
+    if source.column_id == target.column_id and source.bbox.y1 <= target.bbox.y1:
+        axes.add("COLUMN_HEADER")
+    return axes or {"OTHER"}
+
+
+def _misbind_type(
+    source: TableCell,
+    target: TableCell,
+    *,
+    incoming_count: int,
+    source_fanout: int,
+    duplicate_header_text: bool,
+) -> str:
+    normalized = _normalized_header_text(source.text)
+    if source.page_number != target.page_number:
+        return "CROSS_PAGE_CONTEXT_LEAK"
+    if _is_unit_header(source.text):
+        return "UNIT_HEADER_MISBIND"
+    if PARAMETER_CODE_PATTERN.fullmatch(normalized):
+        return "PARAMETER_CODE_MISBIND"
+    if re.search(r"fault|cause|action", source.text, re.I):
+        return "FAULT_CODE_CAUSE_ACTION_MISBIND"
+    if _is_model_header(source.text):
+        return "MODEL_COLUMN_MISBIND"
+    if duplicate_header_text:
+        return "DUPLICATE_HEADER_AMBIGUITY"
+    if source.row_id == target.row_id and source.bbox.x0 <= target.bbox.x0:
+        return "ROW_HEADER_MISBIND"
+    if source.bbox.y1 <= target.bbox.y0 + 1 and source.bbox.width > target.bbox.width * 1.5:
+        if source_fanout > 12 or source.bbox.width > target.bbox.width * 4:
+            return "OVER_BROAD_COLUMN_HEADER"
+        return "MERGED_HEADER_OVER_PROPAGATION"
+    if incoming_count > 1 and source.bbox.y1 <= target.bbox.y0 + 1:
+        return "MULTI_LEVEL_HEADER_ERROR"
+    if source.column_id == target.column_id:
+        return "WRONG_PARENT_HEADER"
+    if not source.bbox.overlaps_x(target.bbox, tolerance=1.0):
+        return "CROSS_COLUMN_MISBIND"
+    if source.bbox.y1 <= target.bbox.y0 + 1:
+        return "SPANNING_HEADER_ERROR"
+    if source.bbox.overlaps_x(target.bbox, tolerance=2.0):
+        return "GEOMETRY_OVERLAP_AMBIGUITY"
+    return "OTHER"
+
+
+def _new_ownership_diagnostics() -> dict:
+    return {
+        "counts": {
+            key: {"gold": 0, "predicted": 0, "matched": 0, "matched_gold": 0, "false": 0}
+            for key in OWNERSHIP_DIAGNOSTIC_TYPES
+        },
+        "misbind_taxonomy": {key: 0 for key in OWNERSHIP_MISBIND_TYPES},
+        "misbind_examples": {key: [] for key in OWNERSHIP_MISBIND_TYPES},
+    }
+
+
+def _ownership_diagnostics(
+    gold: PageLayout,
+    predicted: PageLayout,
+    mapping: dict[str, str],
+) -> dict:
+    diagnostics = _new_ownership_diagnostics()
+    gold_cells = _cell_by_id(gold)
+    predicted_cells = _cell_by_id(predicted)
+    gold_edges = _ownership_edges(gold)
+    predicted_relationships = [
+        edge for edge in predicted.relationships
+        if edge.relationship_type == "HEADER_APPLIES_TO"
+        and edge.header_block_id in mapping
+        and edge.value_block_id in mapping
+        and edge.header_block_id in predicted_cells
+        and edge.value_block_id in predicted_cells
+    ]
+    predicted_by_identity = {
+        (mapping[edge.header_block_id], mapping[edge.value_block_id]): edge
+        for edge in predicted_relationships
+    }
+    predicted_incoming: dict[str, int] = {}
+    source_fanout: dict[str, int] = {}
+    for edge in predicted_by_identity.values():
+        predicted_incoming[edge.value_block_id] = predicted_incoming.get(edge.value_block_id, 0) + 1
+        source_fanout[edge.header_block_id] = source_fanout.get(edge.header_block_id, 0) + 1
+    text_counts: dict[tuple[str, str], int] = {}
+    for cell in predicted.cells:
+        key = (next((region.table_region_id for region in predicted.table_regions if cell.cell_id in region.cell_ids), ""), _normalized_header_text(cell.text))
+        text_counts[key] = text_counts.get(key, 0) + 1
+
+    gold_incoming: dict[str, int] = {}
+    for _, target_id in gold_edges:
+        gold_incoming[target_id] = gold_incoming.get(target_id, 0) + 1
+    for source_id, target_id in gold_edges:
+        source = gold_cells.get(source_id)
+        target = gold_cells.get(target_id)
+        if not source or not target:
+            continue
+        axes = _ownership_axes(
+            source, target, incoming_count=gold_incoming.get(target_id, 0), page_number=gold.page_number
+        )
+        for axis in axes:
+            diagnostics["counts"][axis]["gold"] += 1
+            if (source_id, target_id) in predicted_by_identity:
+                diagnostics["counts"][axis]["matched_gold"] += 1
+
+    for identity, edge in predicted_by_identity.items():
+        source = predicted_cells[edge.header_block_id]
+        target = predicted_cells[edge.value_block_id]
+        axes = _ownership_axes(
+            source,
+            target,
+            incoming_count=predicted_incoming.get(edge.value_block_id, 0),
+            page_number=predicted.page_number,
+        )
+        for axis in axes:
+            diagnostics["counts"][axis]["predicted"] += 1
+        if identity in gold_edges:
+            for axis in axes:
+                diagnostics["counts"][axis]["matched"] += 1
+            continue
+        for axis in axes:
+            diagnostics["counts"][axis]["false"] += 1
+        table_id = edge.table_region_id
+        duplicate = text_counts.get((table_id, _normalized_header_text(source.text)), 0) > 1
+        error_type = _misbind_type(
+            source,
+            target,
+            incoming_count=predicted_incoming.get(edge.value_block_id, 0),
+            source_fanout=source_fanout.get(edge.header_block_id, 0),
+            duplicate_header_text=duplicate,
+        )
+        diagnostics["misbind_taxonomy"][error_type] += 1
+        examples = diagnostics["misbind_examples"][error_type]
+        if len(examples) < 5:
+            examples.append({
+                "document_id": predicted.document_id,
+                "page_number": predicted.page_number,
+                "header_id": edge.header_block_id,
+                "value_id": edge.value_block_id,
+            })
+    return diagnostics
+
+
+def _merge_ownership_diagnostics(total: dict, page: dict) -> None:
+    for axis in OWNERSHIP_DIAGNOSTIC_TYPES:
+        for key in total["counts"][axis]:
+            total["counts"][axis][key] += page["counts"][axis][key]
+    for error_type in OWNERSHIP_MISBIND_TYPES:
+        total["misbind_taxonomy"][error_type] += page["misbind_taxonomy"][error_type]
+        remaining = 5 - len(total["misbind_examples"][error_type])
+        if remaining > 0:
+            total["misbind_examples"][error_type].extend(page["misbind_examples"][error_type][:remaining])
+
+
+def _finalize_ownership_diagnostics(diagnostics: dict) -> dict:
+    metrics = {}
+    for axis, counts in diagnostics["counts"].items():
+        label = axis.casefold()
+        metrics[f"{label}_ownership_precision"] = _safe_div(counts["matched"], counts["predicted"])
+        metrics[f"{label}_ownership_recall"] = _safe_div(counts["matched_gold"], counts["gold"])
+    diagnostics["metrics"] = metrics
+    return diagnostics
 
 
 def _cell_mapping(gold: PageLayout, predicted: PageLayout) -> tuple[dict[str, str], list[Match]]:
@@ -160,6 +397,7 @@ def evaluate_pages(pairs: Iterable[tuple[PageLayout, PageLayout, str]]) -> dict:
         "PAGE_PROVENANCE_ERROR",
         "AMBIGUOUS_CASE",
     )}
+    ownership_diagnostics = _new_ownership_diagnostics()
     materialized = list(pairs)
     for gold, predicted, slice_name in materialized:
         slice_pairs.setdefault(slice_name, []).append((gold, predicted, slice_name))
@@ -204,6 +442,10 @@ def evaluate_pages(pairs: Iterable[tuple[PageLayout, PageLayout, str]]) -> dict:
         counts["matched_ownership"] += len(matched_edges)
         error_taxonomy["HEADER_MISBIND"] += len(predicted_edges - gold_edges)
         error_taxonomy["AMBIGUOUS_CASE"] += sum(edge.relationship_type == "AMBIGUOUS" for edge in gold.relationships)
+        _merge_ownership_diagnostics(
+            ownership_diagnostics,
+            _ownership_diagnostics(gold, predicted, mapping),
+        )
 
         row_merges, column_merges, row_splits, column_splits, predicted_groups = _group_error_counts(gold, predicted, mapping)
         counts["false_merges"] += row_merges + column_merges
@@ -242,7 +484,16 @@ def evaluate_pages(pairs: Iterable[tuple[PageLayout, PageLayout, str]]) -> dict:
     if len(slice_pairs) > 1:
         for slice_name, items in sorted(slice_pairs.items()):
             slices[slice_name] = evaluate_pages(items)["metrics"]
-    return {"metrics": metrics, "counts": counts, "slices": slices, "error_taxonomy": error_taxonomy}
+    ownership_diagnostics = _finalize_ownership_diagnostics(ownership_diagnostics)
+    error_taxonomy["UNIT_MISBIND"] = ownership_diagnostics["misbind_taxonomy"]["UNIT_HEADER_MISBIND"]
+    error_taxonomy["MODEL_COLUMN_MISBIND"] = ownership_diagnostics["misbind_taxonomy"]["MODEL_COLUMN_MISBIND"]
+    return {
+        "metrics": metrics,
+        "counts": counts,
+        "slices": slices,
+        "error_taxonomy": error_taxonomy,
+        "ownership_diagnostics": ownership_diagnostics,
+    }
 
 
 def layout_digest(layout: DocumentLayout) -> str:
