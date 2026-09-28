@@ -4,7 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
-from .annotation import freeze_dev_gold, validate_page_annotation
+from .annotation import (
+    HUMAN_AUTHORITY,
+    MODEL_AUTHORITY,
+    freeze_dev_gold,
+    freeze_model_adjudicated_dev_gold,
+    validate_page_annotation,
+)
 from .annotation_workspace import prepare_human_annotation_workspace
 from .dev_sampling import allocate_final_gate_holdout, select_dev_sample
 from .evaluator import apply_frozen_gates, evaluate_pages, stable_id_reproducibility
@@ -145,11 +151,17 @@ def build_parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser("validate-annotations", help="validate private annotation drafts")
     validate.add_argument("--workspace", required=True)
     validate.add_argument("--require-complete", action="store_true")
+    validate.add_argument(
+        "--authority", choices=("human", "model-adjudicated"), default="human"
+    )
 
-    freeze = subparsers.add_parser("freeze-dev-gold", help="freeze completed human-confirmed DEV Gold")
+    freeze = subparsers.add_parser("freeze-dev-gold", help="freeze completed DEV Gold")
     freeze.add_argument("--workspace", required=True)
     freeze.add_argument("--output", required=True)
     freeze.add_argument("--correction-reason")
+    freeze.add_argument(
+        "--authority", choices=("human", "model-adjudicated"), default="human"
+    )
 
     qualify = subparsers.add_parser("qualify-corpus", help="research-only full-corpus page qualification")
     qualify.add_argument("--source-map", required=True)
@@ -205,16 +217,22 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.command == "validate-annotations":
         workspace = Path(args.workspace)
+        authority_mode = MODEL_AUTHORITY if args.authority == "model-adjudicated" else HUMAN_AUTHORITY
         paths = sorted((workspace / "annotations").glob("*.json"))
         results = []
         for path in paths:
             annotation = json.loads(path.read_text(encoding="utf-8"))
-            validation = validate_page_annotation(annotation, require_complete=args.require_complete)
+            validation = validate_page_annotation(
+                annotation,
+                require_complete=args.require_complete,
+                authority_mode=authority_mode,
+            )
             results.append({"key": path.stem, **validation})
         report = {
             "annotation_schema_valid": all(item["valid"] for item in results),
             "ready_for_evaluation": bool(results) and all(item["ready_for_evaluation"] for item in results),
             "page_count": len(results),
+            "authority_mode": authority_mode,
             "invalid_pages": [item["key"] for item in results if not item["valid"]],
             "ambiguous_count": sum(item["ambiguous_count"] for item in results),
             "pages": results,
@@ -231,20 +249,35 @@ def main(argv: list[str] | None = None) -> None:
         ]
         output = Path(args.output)
         previous = json.loads(output.read_text(encoding="utf-8")) if output.exists() else None
-        payload = freeze_dev_gold(annotations, output)
-        if previous and previous.get("dev_gold_digest") != payload["dev_gold_digest"]:
+        payload = (
+            freeze_model_adjudicated_dev_gold(annotations, output)
+            if args.authority == "model-adjudicated"
+            else freeze_dev_gold(annotations, output)
+        )
+        digest_key = (
+            "model_dev_gold_digest"
+            if args.authority == "model-adjudicated"
+            else "dev_gold_digest"
+        )
+        if previous and previous.get(digest_key) != payload[digest_key]:
             if not args.correction_reason:
                 output.write_text(json.dumps(previous, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                 raise ValueError("Gold changed; --correction-reason is required")
             ledger_path = workspace / "audit" / "gold_corrections.json"
             ledger = json.loads(ledger_path.read_text(encoding="utf-8")) if ledger_path.exists() else []
             ledger.append({
-                "old_digest": previous["dev_gold_digest"],
-                "new_digest": payload["dev_gold_digest"],
+                "old_digest": previous[digest_key],
+                "new_digest": payload[digest_key],
                 "reason": args.correction_reason,
             })
             ledger_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(json.dumps({"status": "REAL_LAYOUT_DEV_GOLD", "dev_gold_digest": payload["dev_gold_digest"]}))
+        if args.authority == "model-adjudicated":
+            print(json.dumps({
+                "status": "MODEL_ADJUDICATED_DEV_GOLD",
+                "model_dev_gold_digest": payload["model_dev_gold_digest"],
+            }))
+        else:
+            print(json.dumps({"status": "REAL_LAYOUT_DEV_GOLD", "dev_gold_digest": payload["dev_gold_digest"]}))
         return
     if args.command == "qualify-corpus":
         summary = run_full_qualification(args.source_map, args.corpus_root, args.output)

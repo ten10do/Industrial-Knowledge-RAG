@@ -7,7 +7,9 @@ import pytest
 from backend.layout_research.annotation import (
     canonical_gold_digest,
     freeze_dev_gold,
+    freeze_model_adjudicated_dev_gold,
     load_confirmed_dev_gold,
+    load_model_adjudicated_dev_gold,
     new_page_annotation,
     validate_page_annotation,
 )
@@ -138,6 +140,58 @@ def test_freeze_and_load_accept_only_confirmed_dev_gold(tmp_path):
     changed["pages"][0]["blocks"][0]["bbox"][0] += 1
     output.write_text(json.dumps(changed), encoding="utf-8")
     with pytest.raises(ValueError, match="digest mismatch"):
+        load_confirmed_dev_gold(output)
+
+
+def _complete_model_annotation():
+    annotation = _complete_annotation()
+    annotation.update({
+        "gold_type": "MODEL_ADJUDICATED_DEV_GOLD",
+        "status": "ADJUDICATED",
+        "human_confirmed": False,
+        "authority_mode": "MODEL_ADJUDICATED",
+        "model_adjudicated": True,
+        "authority": {
+            "source": "CODEX",
+            "mode": "MODEL_ADJUDICATED",
+            "human_confirmed": False,
+            "model_adjudicated": True,
+            "gold_scope": "DEV_ONLY",
+            "resolution": {
+                "table_structure_resolved": True,
+                "ownership_resolved": True,
+                "unresolved_required_relations": 0,
+                "second_pass_complete": True,
+            },
+        },
+    })
+    for collection in ("blocks", "table_regions", "rows", "columns", "cells", "relationships", "continuations"):
+        for item in annotation[collection]:
+            item["human_confirmed"] = False
+            item["model_adjudicated"] = True
+    return annotation
+
+
+def test_model_adjudicated_completion_never_uses_human_confirmation(tmp_path):
+    annotation = _complete_model_annotation()
+    validation = validate_page_annotation(
+        annotation, require_complete=True, authority_mode="MODEL_ADJUDICATED"
+    )
+    assert validation["ready_for_evaluation"] is True
+    annotation["human_confirmed"] = True
+    validation = validate_page_annotation(
+        annotation, require_complete=True, authority_mode="MODEL_ADJUDICATED"
+    )
+    assert "model-adjudicated Gold must keep human_confirmed=false" in validation["errors"]
+
+
+def test_freeze_and_load_model_adjudicated_dev_gold(tmp_path):
+    output = tmp_path / "model-dev-gold.json"
+    payload = freeze_model_adjudicated_dev_gold([_complete_model_annotation()], output)
+    assert payload["status"] == "MODEL_ADJUDICATED_DEV_GOLD"
+    assert payload["human_review"] == "NONE"
+    assert load_model_adjudicated_dev_gold(output)[0]["human_confirmed"] is False
+    with pytest.raises(ValueError, match="REAL_LAYOUT_DEV_GOLD"):
         load_confirmed_dev_gold(output)
 
 

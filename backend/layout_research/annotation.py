@@ -8,7 +8,11 @@ from typing import Any
 from .models import BBox
 
 
-PAGE_STATUSES = {"NOT_STARTED", "IN_PROGRESS", "COMPLETED", "REVIEWED"}
+PAGE_STATUSES = {"NOT_STARTED", "IN_PROGRESS", "COMPLETED", "REVIEWED", "ADJUDICATED"}
+HUMAN_GOLD_TYPE = "REAL_LAYOUT_DEV_GOLD"
+MODEL_GOLD_TYPE = "MODEL_ADJUDICATED_DEV_GOLD"
+HUMAN_AUTHORITY = "HUMAN"
+MODEL_AUTHORITY = "MODEL_ADJUDICATED"
 RELATIONSHIP_TYPES = {
     "SECTION_CONTAINS",
     "TABLE_CONTAINS",
@@ -63,12 +67,21 @@ def _box_inside(inner: BBox, outer: BBox, tolerance: float = 1.0) -> bool:
     )
 
 
-def validate_page_annotation(annotation: dict[str, Any], *, require_complete: bool = False) -> dict[str, Any]:
+def validate_page_annotation(
+    annotation: dict[str, Any],
+    *,
+    require_complete: bool = False,
+    authority_mode: str | None = None,
+) -> dict[str, Any]:
     errors: list[str] = []
+    mode = authority_mode or annotation.get("authority_mode") or HUMAN_AUTHORITY
+    if mode not in {HUMAN_AUTHORITY, MODEL_AUTHORITY}:
+        errors.append("authority_mode must be HUMAN or MODEL_ADJUDICATED")
     if annotation.get("schema_version") != 2:
         errors.append("schema_version must be 2")
-    if annotation.get("gold_type") != "REAL_LAYOUT_DEV_GOLD":
-        errors.append("gold_type must be REAL_LAYOUT_DEV_GOLD")
+    expected_gold_type = MODEL_GOLD_TYPE if mode == MODEL_AUTHORITY else HUMAN_GOLD_TYPE
+    if annotation.get("gold_type") != expected_gold_type:
+        errors.append(f"gold_type must be {expected_gold_type}")
     if annotation.get("split") != "DEV":
         errors.append("split must be DEV; FINAL_GATE is forbidden in LA-0.5")
     if annotation.get("status") not in PAGE_STATUSES:
@@ -215,17 +228,46 @@ def validate_page_annotation(annotation: dict[str, Any], *, require_complete: bo
         for item in values
     ]
     if require_complete:
-        if annotation.get("status") != "REVIEWED":
-            errors.append("completed Gold must have REVIEWED status")
-        if annotation.get("human_confirmed") is not True:
-            errors.append("completed Gold must set human_confirmed=true")
-        if any(item.get("human_confirmed") is not True for item in confirmed_items):
-            errors.append("all Gold items must be human_confirmed=true")
+        if mode == MODEL_AUTHORITY:
+            authority = annotation.get("authority") or {}
+            resolution = authority.get("resolution") or {}
+            if annotation.get("status") != "ADJUDICATED":
+                errors.append("completed model Gold must have ADJUDICATED status")
+            if annotation.get("human_confirmed") is not False:
+                errors.append("model-adjudicated Gold must keep human_confirmed=false")
+            if annotation.get("model_adjudicated") is not True:
+                errors.append("completed model Gold must set model_adjudicated=true")
+            if any(item.get("human_confirmed") is not False for item in confirmed_items):
+                errors.append("model-adjudicated Gold items must keep human_confirmed=false")
+            if any(item.get("model_adjudicated") is not True for item in confirmed_items):
+                errors.append("model-adjudicated Gold items must set model_adjudicated=true")
+            if authority.get("source") != "CODEX" or authority.get("mode") != MODEL_AUTHORITY:
+                errors.append("model-adjudicated Gold authority must be CODEX/MODEL_ADJUDICATED")
+            if authority.get("human_confirmed") is not False:
+                errors.append("model-adjudicated authority must keep human_confirmed=false")
+            if authority.get("model_adjudicated") is not True or authority.get("gold_scope") != "DEV_ONLY":
+                errors.append("model-adjudicated authority metadata is incomplete")
+            if resolution.get("table_structure_resolved") is not True:
+                errors.append("model-adjudicated table structure is unresolved")
+            if resolution.get("ownership_resolved") is not True:
+                errors.append("model-adjudicated ownership is unresolved")
+            if resolution.get("unresolved_required_relations") != 0:
+                errors.append("model-adjudicated required relations remain unresolved")
+            if resolution.get("second_pass_complete") is not True:
+                errors.append("model-adjudicated second pass is incomplete")
+        else:
+            if annotation.get("status") != "REVIEWED":
+                errors.append("completed Gold must have REVIEWED status")
+            if annotation.get("human_confirmed") is not True:
+                errors.append("completed Gold must set human_confirmed=true")
+            if any(item.get("human_confirmed") is not True for item in confirmed_items):
+                errors.append("all Gold items must be human_confirmed=true")
 
     return {
         "valid": not errors,
         "errors": sorted(set(errors)),
         "ready_for_evaluation": not errors and require_complete,
+        "authority_mode": mode,
         "ambiguous_count": ambiguous_count,
         "ownership_annotation_count": ownership_count,
         "ambiguous_rate": ambiguous_count / ownership_count if ownership_count else 0.0,
@@ -245,6 +287,9 @@ def _semantic_page(annotation: dict[str, Any]) -> dict[str, Any]:
         "slices",
         "status",
         "human_confirmed",
+        "authority_mode",
+        "model_adjudicated",
+        "authority",
         "blocks",
         "table_regions",
         "rows",
@@ -266,7 +311,10 @@ def canonical_gold_digest(annotations: list[dict[str, Any]]) -> str:
 
 
 def freeze_dev_gold(annotations: list[dict[str, Any]], output: str | Path) -> dict[str, Any]:
-    validations = [validate_page_annotation(annotation, require_complete=True) for annotation in annotations]
+    validations = [
+        validate_page_annotation(annotation, require_complete=True, authority_mode=HUMAN_AUTHORITY)
+        for annotation in annotations
+    ]
     errors = [error for validation in validations for error in validation["errors"]]
     if errors:
         raise ValueError("DEV Gold is not ready: " + "; ".join(sorted(set(errors))))
@@ -277,6 +325,39 @@ def freeze_dev_gold(annotations: list[dict[str, Any]], output: str | Path) -> di
         "final_gate_consumed": False,
         "annotation_schema_valid": True,
         "dev_gold_digest": digest,
+        "pages": sorted(
+            (_semantic_page(annotation) for annotation in annotations),
+            key=lambda item: (item["doc_id"], item["page_number"]),
+        ),
+    }
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return payload
+
+
+def freeze_model_adjudicated_dev_gold(
+    annotations: list[dict[str, Any]], output: str | Path
+) -> dict[str, Any]:
+    validations = [
+        validate_page_annotation(annotation, require_complete=True, authority_mode=MODEL_AUTHORITY)
+        for annotation in annotations
+    ]
+    errors = [error for validation in validations for error in validation["errors"]]
+    if errors:
+        raise ValueError("Model-adjudicated DEV Gold is not ready: " + "; ".join(sorted(set(errors))))
+    digest = canonical_gold_digest(annotations)
+    payload = {
+        "status": MODEL_GOLD_TYPE,
+        "split": "DEV",
+        "final_gate_consumed": False,
+        "annotation_schema_valid": True,
+        "authority": MODEL_AUTHORITY,
+        "annotator": "CODEX",
+        "human_review": "NONE",
+        "human_gold": False,
+        "model_adjudicated_dev_gold": True,
+        "model_dev_gold_digest": digest,
         "pages": sorted(
             (_semantic_page(annotation) for annotation in annotations),
             key=lambda item: (item["doc_id"], item["page_number"]),
@@ -299,4 +380,20 @@ def load_confirmed_dev_gold(path: str | Path) -> list[dict[str, Any]]:
         validation = validate_page_annotation(page, require_complete=True)
         if not validation["valid"]:
             raise ValueError("DEV Gold page is invalid")
+    return pages
+
+
+def load_model_adjudicated_dev_gold(path: str | Path) -> list[dict[str, Any]]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("status") != MODEL_GOLD_TYPE or payload.get("split") != "DEV":
+        raise ValueError("evaluator accepts only frozen MODEL_ADJUDICATED_DEV_GOLD")
+    pages = payload.get("pages", [])
+    if canonical_gold_digest(pages) != payload.get("model_dev_gold_digest"):
+        raise ValueError("model DEV Gold digest mismatch")
+    for page in pages:
+        validation = validate_page_annotation(
+            page, require_complete=True, authority_mode=MODEL_AUTHORITY
+        )
+        if not validation["valid"]:
+            raise ValueError("model DEV Gold page is invalid")
     return pages

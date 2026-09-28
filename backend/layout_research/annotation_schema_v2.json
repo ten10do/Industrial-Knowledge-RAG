@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/layout-research/annotation-schema-v2.json",
-  "title": "REAL_LAYOUT_DEV_GOLD page annotation",
+  "title": "Layout DEV Gold page annotation",
   "type": "object",
   "required": ["schema_version", "gold_type", "split", "doc_id", "page_number", "width", "height", "coordinate_origin", "slices", "status", "human_confirmed", "blocks", "table_regions", "rows", "columns", "cells", "relationships", "continuations"],
   "properties": {
     "schema_version": {"const": 2},
-    "gold_type": {"const": "REAL_LAYOUT_DEV_GOLD"},
+    "gold_type": {"enum": ["REAL_LAYOUT_DEV_GOLD", "MODEL_ADJUDICATED_DEV_GOLD"]},
     "split": {"const": "DEV"},
     "doc_id": {"pattern": "^doc_[0-9]{3}$"},
     "page_number": {"type": "integer", "minimum": 1},
@@ -14,8 +14,11 @@
     "height": {"type": "number", "exclusiveMinimum": 0},
     "coordinate_origin": {"const": "top-left"},
     "slices": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "status": {"enum": ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "REVIEWED"]},
+    "status": {"enum": ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "REVIEWED", "ADJUDICATED"]},
     "human_confirmed": {"type": "boolean"},
+    "authority_mode": {"enum": ["HUMAN", "MODEL_ADJUDICATED"]},
+    "model_adjudicated": {"type": "boolean"},
+    "authority": {"type": "object"},
     "blocks": {"type": "array", "items": {"$ref": "#/$defs/block"}},
     "table_regions": {"type": "array", "items": {"$ref": "#/$defs/boxEntity"}},
     "rows": {"type": "array", "items": {"$ref": "#/$defs/boxEntity"}},
@@ -25,6 +28,19 @@
     "continuations": {"type": "array", "items": {"$ref": "#/$defs/continuation"}},
     "audit": {"type": "object"}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"gold_type": {"const": "MODEL_ADJUDICATED_DEV_GOLD"}}},
+      "then": {
+        "required": ["authority_mode", "model_adjudicated", "authority"],
+        "properties": {
+          "authority_mode": {"const": "MODEL_ADJUDICATED"},
+          "model_adjudicated": {"const": true},
+          "human_confirmed": {"const": false}
+        }
+      }
+    }
+  ],
   "$defs": {
     "bbox": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}, {"type": "number"}], "minItems": 4, "maxItems": 4},
     "block": {
@@ -58,7 +74,7 @@
     },
     "continuation": {
       "type": "object",
-      "required": ["from_doc_id", "from_page_number", "from_table_region_id", "to_doc_id", "to_page_number", "to_table_region_id", "human_confirmed"],
+      "required": ["from_doc_id", "from_page_number", "to_doc_id", "to_page_number", "human_confirmed"],
       "properties": {"from_doc_id": {"type": "string"}, "from_page_number": {"type": "integer"}, "from_table_region_id": {"type": "string"}, "to_doc_id": {"type": "string"}, "to_page_number": {"type": "integer"}, "to_table_region_id": {"type": "string"}, "human_confirmed": {"type": "boolean"}}
     }
   }
