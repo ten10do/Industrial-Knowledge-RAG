@@ -16,6 +16,7 @@ from backend.layout_research.models import (
     HeaderRelationship,
     stable_id,
 )
+from backend.layout_research.parsers import refine_structured_ownership
 from backend.layout_research.synthetic import (
     gold_page,
     load_synthetic_fixture,
@@ -187,6 +188,104 @@ def test_unit_and_model_misbinds_are_counted_separately():
     )
     assert model_report["error_taxonomy"]["MODEL_COLUMN_MISBIND"] == 1
     assert model_report["ownership_diagnostics"]["counts"]["MODEL_COLUMN"]["false"] == 1
+
+
+def test_structured_ownership_keeps_proven_row_and_column_parents_only():
+    baseline = gold_page(_case("two_column_specification"))
+    target = baseline.relationships[0].value_block_id
+    valid_sources = {edge.header_block_id for edge in baseline.relationships if edge.value_block_id == target}
+    wrong_source = next(cell.cell_id for cell in baseline.cells if cell.cell_id not in valid_sources and cell.cell_id != target)
+    extra = HeaderRelationship(
+        relationship_id="unproven-adjacency",
+        header_block_id=wrong_source,
+        value_block_id=target,
+        relationship_type="HEADER_APPLIES_TO",
+        page_number=baseline.page_number,
+        table_region_id=baseline.table_regions[0].table_region_id,
+    )
+    refined = refine_structured_ownership(replace(baseline, relationships=baseline.relationships + (extra,)))
+    refined_edges = {
+        (edge.header_block_id, edge.value_block_id)
+        for edge in refined.relationships
+        if edge.relationship_type == "HEADER_APPLIES_TO"
+    }
+    assert (wrong_source, target) not in refined_edges
+    assert {(source, target) for source in valid_sources} <= refined_edges
+
+
+def test_structured_ownership_rejects_duplicate_header_ambiguity():
+    baseline = gold_page(_case("two_column_specification"))
+    edge = baseline.relationships[0]
+    source = next(cell for cell in baseline.cells if cell.cell_id == edge.header_block_id)
+    duplicate_id = next(cell.cell_id for cell in baseline.cells if cell.cell_id != source.cell_id)
+    cells = tuple(
+        replace(cell, text=source.text) if cell.cell_id == duplicate_id else cell
+        for cell in baseline.cells
+    )
+    duplicate_edge = replace(edge, relationship_id="duplicate-header", header_block_id=duplicate_id)
+    refined = refine_structured_ownership(
+        replace(baseline, cells=cells, relationships=baseline.relationships + (duplicate_edge,))
+    )
+    assert not any(
+        relation.relationship_type == "HEADER_APPLIES_TO"
+        and relation.value_block_id == edge.value_block_id
+        and relation.header_block_id in {edge.header_block_id, duplicate_id}
+        for relation in refined.relationships
+    )
+
+
+def test_structured_ownership_v2_allows_structurally_unique_repeated_text():
+    baseline = gold_page(_case("two_column_specification"))
+    edge = baseline.relationships[0]
+    source = next(cell for cell in baseline.cells if cell.cell_id == edge.header_block_id)
+    duplicate_id = next(cell.cell_id for cell in baseline.cells if cell.cell_id != source.cell_id)
+    cells = tuple(
+        replace(cell, text=source.text) if cell.cell_id == duplicate_id else cell
+        for cell in baseline.cells
+    )
+    refined = refine_structured_ownership(
+        replace(baseline, cells=cells),
+        parser_name="PDFPLUMBER_STRUCTURED_OWNERSHIP_V2",
+        parser_version="2",
+        reject_repeated_text_globally=False,
+    )
+    assert any(
+        relation.relationship_type == "HEADER_APPLIES_TO"
+        and relation.header_block_id == edge.header_block_id
+        and relation.value_block_id == edge.value_block_id
+        for relation in refined.relationships
+    )
+
+
+def test_structured_ownership_v2_emits_no_edge_for_competing_equal_parents():
+    baseline = gold_page(_case("two_column_specification"))
+    edge = baseline.relationships[0]
+    source = next(cell for cell in baseline.cells if cell.cell_id == edge.header_block_id)
+    competitor_id = next(cell.cell_id for cell in baseline.cells if cell.cell_id != source.cell_id)
+    cells = tuple(
+        replace(
+            cell,
+            bbox=source.bbox,
+            row_id=source.row_id,
+            column_id=source.column_id,
+            text=source.text,
+        ) if cell.cell_id == competitor_id else cell
+        for cell in baseline.cells
+    )
+    competitor = replace(edge, relationship_id="equal-parent", header_block_id=competitor_id)
+    refined = refine_structured_ownership(
+        replace(baseline, cells=cells, relationships=baseline.relationships + (competitor,)),
+        parser_name="PDFPLUMBER_STRUCTURED_OWNERSHIP_V2",
+        parser_version="2",
+        reject_repeated_text_globally=False,
+    )
+    competing_sources = {edge.header_block_id, competitor_id}
+    assert not any(
+        relation.relationship_type == "HEADER_APPLIES_TO"
+        and relation.value_block_id == edge.value_block_id
+        and relation.header_block_id in competing_sources
+        for relation in refined.relationships
+    )
 
 
 def test_mutation_missing_and_extra_ownership_are_detected():

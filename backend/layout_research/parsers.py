@@ -500,6 +500,194 @@ class PdfPlumberTableParser:
         return DocumentLayout(document_id, tuple(pages), self.name, self.version, _config_digest(self.name, self.version))
 
 
+def _ownership_candidate_axis(source: TableCell, target: TableCell) -> tuple[str, float] | None:
+    """Return structural proof class and distance; text adjacency is never evidence."""
+    if source.row_id == target.row_id and source.bbox.x1 <= target.bbox.x0 + 1:
+        return "ROW", max(0.0, target.bbox.x0 - source.bbox.x1)
+    if source.column_id == target.column_id and source.bbox.y1 <= target.bbox.y0 + 1:
+        return "COLUMN", max(0.0, target.bbox.y0 - source.bbox.y1)
+    target_center = (target.bbox.x0 + target.bbox.x1) / 2
+    if (
+        source.bbox.y1 <= target.bbox.y0 + 1
+        and source.bbox.x0 - 1 <= target_center <= source.bbox.x1 + 1
+    ):
+        return "SPANNING", max(0.0, target.bbox.y0 - source.bbox.y1)
+    return None
+
+
+def _normalized_cell_text(text: str) -> str:
+    return re.sub(r"\s+", "", text).casefold()
+
+
+def refine_structured_ownership(
+    page: PageLayout,
+    *,
+    parser_name: str = "PDFPLUMBER_STRUCTURED_OWNERSHIP_V1",
+    parser_version: str = "1",
+    reject_repeated_text_globally: bool = True,
+) -> PageLayout:
+    """Apply a precision-first structural ownership acceptance contract.
+
+    Candidate generation remains the baseline parser's high-recall edge set.
+    Acceptance requires same-table row/column proof or a unique containing
+    spanning header. Broad fanout and duplicate-header ambiguity emit no
+    ownership edge. Distance orders already eligible structural candidates;
+    it never creates eligibility by itself.
+    """
+    cells = {cell.cell_id: cell for cell in page.cells}
+    table_by_cell = {
+        cell_id: region.table_region_id
+        for region in page.table_regions
+        for cell_id in region.cell_ids
+    }
+    candidate_edges = [
+        edge for edge in page.relationships
+        if edge.relationship_type == "HEADER_APPLIES_TO"
+        and edge.header_block_id in cells
+        and edge.value_block_id in cells
+        and table_by_cell.get(edge.header_block_id) == table_by_cell.get(edge.value_block_id)
+    ]
+    source_fanout: dict[str, int] = {}
+    text_counts: dict[tuple[str, str], int] = {}
+    for edge in candidate_edges:
+        source_fanout[edge.header_block_id] = source_fanout.get(edge.header_block_id, 0) + 1
+    for cell_id, cell in cells.items():
+        key = (table_by_cell.get(cell_id, ""), _normalized_cell_text(cell.text))
+        text_counts[key] = text_counts.get(key, 0) + 1
+
+    eligible: dict[str, dict[str, list[tuple[HeaderRelationship, float]]]] = {}
+    rejected_targets: set[str] = set()
+    for edge in candidate_edges:
+        source = cells[edge.header_block_id]
+        target = cells[edge.value_block_id]
+        evidence = _ownership_candidate_axis(source, target)
+        if evidence is None:
+            rejected_targets.add(edge.value_block_id)
+            continue
+        axis, distance = evidence
+        duplicate_key = (table_by_cell.get(source.cell_id, ""), _normalized_cell_text(source.text))
+        if reject_repeated_text_globally and text_counts.get(duplicate_key, 0) > 1:
+            rejected_targets.add(edge.value_block_id)
+            continue
+        if (
+            axis == "SPANNING"
+            and source_fanout.get(source.cell_id, 0) > 12
+            and source.bbox.width > target.bbox.width * 4
+        ):
+            rejected_targets.add(edge.value_block_id)
+            continue
+        eligible.setdefault(target.cell_id, {}).setdefault(axis, []).append((edge, distance))
+
+    accepted: list[HeaderRelationship] = []
+    ambiguous_targets: set[str] = set(rejected_targets)
+    for target_id, by_axis in eligible.items():
+        for candidates in by_axis.values():
+            ordered = sorted(candidates, key=lambda item: (item[1], item[0].header_block_id))
+            best_distance = ordered[0][1]
+            best = [item for item in ordered if abs(item[1] - best_distance) <= 0.5]
+            if len(best) != 1:
+                ambiguous_targets.add(target_id)
+                continue
+            accepted.append(best[0][0])
+
+    accepted_by_target: dict[str, list[str]] = {}
+    for edge in accepted:
+        accepted_by_target.setdefault(edge.value_block_id, []).append(edge.header_block_id)
+    cells_out = tuple(
+        replace(cell, header_ids=tuple(sorted(accepted_by_target.get(cell.cell_id, ()))))
+        for cell in page.cells
+    )
+    relationships: list[HeaderRelationship] = list(accepted)
+    accepted_targets = set(accepted_by_target)
+    for target_id in sorted(ambiguous_targets - accepted_targets):
+        relationships.append(
+            HeaderRelationship(
+                relationship_id=stable_id("rel", table_by_cell.get(target_id, ""), "AMBIGUOUS", target_id),
+                header_block_id="",
+                value_block_id=target_id,
+                relationship_type="AMBIGUOUS",
+                page_number=page.page_number,
+                table_region_id=table_by_cell.get(target_id, ""),
+                confidence=0.0,
+            )
+        )
+    header_ids_by_cell = {cell.cell_id: cell.header_ids for cell in cells_out}
+    blocks = tuple(
+        replace(
+            block,
+            header_ids=header_ids_by_cell.get(block.block_id, block.header_ids),
+            parser_name=parser_name,
+            parser_version=parser_version,
+        )
+        for block in page.blocks
+    )
+    return replace(
+        page,
+        blocks=blocks,
+        cells=cells_out,
+        relationships=tuple(sorted(relationships, key=lambda edge: edge.relationship_id)),
+        parser_name=parser_name,
+        parser_version=parser_version,
+    )
+
+
+class PdfPlumberStructuredOwnershipParser:
+    """Experimental ownership-only refinement; table detection is unchanged."""
+
+    name = "PDFPLUMBER_STRUCTURED_OWNERSHIP_V1"
+
+    def __init__(self) -> None:
+        self.pdfplumber_version = importlib.metadata.version("pdfplumber")
+        self.version = f"{self.pdfplumber_version}+ownership-v1"
+
+    def parse(self, path: str | Path, document_id: str) -> DocumentLayout:
+        baseline = PdfPlumberTableParser().parse(path, document_id)
+        pages = tuple(
+            refine_structured_ownership(
+                page,
+                parser_name=self.name,
+                parser_version=self.version,
+            )
+            for page in baseline.pages
+        )
+        return DocumentLayout(
+            document_id,
+            pages,
+            self.name,
+            self.version,
+            _config_digest(self.name, self.version),
+        )
+
+
+class PdfPlumberStructuredOwnershipV2Parser:
+    """V2 scopes duplicate ambiguity to competing structural parents."""
+
+    name = "PDFPLUMBER_STRUCTURED_OWNERSHIP_V2"
+
+    def __init__(self) -> None:
+        self.pdfplumber_version = importlib.metadata.version("pdfplumber")
+        self.version = f"{self.pdfplumber_version}+ownership-v2"
+
+    def parse(self, path: str | Path, document_id: str) -> DocumentLayout:
+        baseline = PdfPlumberTableParser().parse(path, document_id)
+        pages = tuple(
+            refine_structured_ownership(
+                page,
+                parser_name=self.name,
+                parser_version=self.version,
+                reject_repeated_text_globally=False,
+            )
+            for page in baseline.pages
+        )
+        return DocumentLayout(
+            document_id,
+            pages,
+            self.name,
+            self.version,
+            _config_digest(self.name, self.version),
+        )
+
+
 class FlatBaselineParser:
     name = "FLAT_BASELINE"
 
@@ -550,5 +738,7 @@ class FlatBaselineParser:
 PARSERS = {
     "pypdf_geometry": PypdfGeometryParser,
     "pdfplumber_table": PdfPlumberTableParser,
+    "pdfplumber_structured_ownership_v1": PdfPlumberStructuredOwnershipParser,
+    "pdfplumber_structured_ownership_v2": PdfPlumberStructuredOwnershipV2Parser,
     "flat_baseline": FlatBaselineParser,
 }
