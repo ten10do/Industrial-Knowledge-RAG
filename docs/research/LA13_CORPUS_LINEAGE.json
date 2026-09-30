@@ -1,0 +1,293 @@
+{
+  "artifact": "LA13_CORPUS_LINEAGE",
+  "schema_version": "la13_lineage_v1",
+  "phase": "LA-1.3",
+  "record_type": "closeout_reconciliation",
+  "record_status": "TERMINAL_INCOMPLETE",
+  "closure_decision": "RESEARCH_LINE_SEALED_BY_OWNER",
+  "provenance": {
+    "record_written_on": "2026-09-30",
+    "writing_role": "ANNOTATOR_B_SESSION",
+    "writing_model": "deepseek-v4.1-flash",
+    "authority_note": "Reconciliation record produced at closeout. It is not Annotator A's original artifact: A never produced CORPUS_LINEAGE.json, so this record documents the observed terminal state rather than replacing an existing freeze artifact.",
+    "derivation": "Recomputed from the external corpus manifests and the on-disk annotation output. No parser and no evaluator was executed. No corpus file was created, modified or deleted by this reconciliation."
+  },
+  "corpus": {
+    "reference": "external_private_corpus",
+    "repo_tracked": false,
+    "logical_root_label": "<LA13_CORPUS_ROOT>",
+    "absolute_path_disclosed": false,
+    "disclosure_rationale": "The corpus lives outside the repository and holds private sanitized manuals. Per the repository absolute-path and private-artifact gates, the root path and the underlying product-document filenames are not recorded here.",
+    "documents": 7,
+    "document_ids_are_sanitized": true,
+    "split": {
+      "NEW_REAL_DEV": [
+        "v3_doc_001",
+        "v3_doc_003",
+        "v3_doc_005"
+      ],
+      "NEW_FINAL_GATE": [
+        "v3_doc_002",
+        "v3_doc_004",
+        "v3_doc_006",
+        "v3_doc_007"
+      ]
+    },
+    "document_overlap": 0,
+    "prediction_blind_freeze": true,
+    "rejected_source_candidates": 3
+  },
+  "manifests": {
+    "NEW_DEV_SAMPLE_MANIFEST.json": {
+      "split": "NEW_REAL_DEV",
+      "n_entries": 26,
+      "manifest_digest": "58df3dc8fca7bbd8120a2cfe0d9ab9cb074fdb7fdf10d4ee98dd26dcc4b0b2ba",
+      "internal_digest_consistent": true,
+      "matches_freeze_summary": true
+    },
+    "NEW_FINAL_SAMPLE_MANIFEST.json": {
+      "split": "NEW_FINAL_GATE",
+      "n_entries": 29,
+      "manifest_digest": "012d5fab7b65a03c41258bd1c161efac57c2838ae58375ae49e157cdc374e1af",
+      "internal_digest_consistent": true,
+      "matches_freeze_summary": true
+    },
+    "SPLIT_MANIFEST.json": {
+      "documents": 7,
+      "manifest_digest": "6566b732f8a6d98cca0c9eeacb1f2a26a0de33e177d19c8a7fedb01c17ffe8a8",
+      "internal_digest_consistent": true,
+      "matches_freeze_summary": true
+    },
+    "FREEZE_SUMMARY.json": {
+      "phase": "LA-1.3A",
+      "NEW_REAL_DEV_pages": 26,
+      "NEW_FINAL_GATE_pages": 29,
+      "document_overlap": 0
+    },
+    "digest_recipe": "sha256 of json.dumps(obj, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False).encode(\"utf-8\") over the manifest object with its own manifest_digest field removed",
+    "declared_annotator_id": "WORKBUDDY_ANNOTATOR_A"
+  },
+  "unit_accounting": {
+    "total_expected_units": 55,
+    "annotated_units": 50,
+    "remaining_units": 5,
+    "completion_ratio": 0.909091,
+    "by_split": {
+      "NEW_REAL_DEV": {
+        "documents": [
+          "v3_doc_001",
+          "v3_doc_003",
+          "v3_doc_005"
+        ],
+        "expected": 26,
+        "done": 26
+      },
+      "NEW_FINAL_GATE": {
+        "documents": [
+          "v3_doc_002",
+          "v3_doc_004",
+          "v3_doc_006",
+          "v3_doc_007"
+        ],
+        "expected": 29,
+        "done": 24
+      }
+    },
+    "by_document": {
+      "v3_doc_001": {
+        "expected": 10,
+        "done": 10,
+        "split": "DEV"
+      },
+      "v3_doc_002": {
+        "expected": 9,
+        "done": 9,
+        "split": "FINAL"
+      },
+      "v3_doc_003": {
+        "expected": 2,
+        "done": 2,
+        "split": "DEV"
+      },
+      "v3_doc_004": {
+        "expected": 8,
+        "done": 8,
+        "split": "FINAL"
+      },
+      "v3_doc_005": {
+        "expected": 14,
+        "done": 14,
+        "split": "DEV"
+      },
+      "v3_doc_006": {
+        "expected": 7,
+        "done": 7,
+        "split": "FINAL"
+      },
+      "v3_doc_007": {
+        "expected": 5,
+        "done": 0,
+        "split": "FINAL"
+      }
+    },
+    "annotation_files_on_disk": 50,
+    "manifest_annotation_mapping": "1:1 by (sanitized_doc_id, page_number); no orphan on either side",
+    "files_violating_naming_convention": [],
+    "annotations_without_a_manifest_entry": []
+  },
+  "remaining_units": [
+    {
+      "sample_id": "sA-FINAL-025",
+      "split": "FINAL",
+      "sanitized_doc_id": "v3_doc_007",
+      "page_number": 10
+    },
+    {
+      "sample_id": "sA-FINAL-026",
+      "split": "FINAL",
+      "sanitized_doc_id": "v3_doc_007",
+      "page_number": 11
+    },
+    {
+      "sample_id": "sA-FINAL-027",
+      "split": "FINAL",
+      "sanitized_doc_id": "v3_doc_007",
+      "page_number": 12
+    },
+    {
+      "sample_id": "sA-FINAL-028",
+      "split": "FINAL",
+      "sanitized_doc_id": "v3_doc_007",
+      "page_number": 22
+    },
+    {
+      "sample_id": "sA-FINAL-029",
+      "split": "FINAL",
+      "sanitized_doc_id": "v3_doc_007",
+      "page_number": 30
+    }
+  ],
+  "annotation_artifact_digests": {
+    "file_count": 50,
+    "naming_convention": "<sanitized_doc_id>_p<page>_annotation_v3.json",
+    "set_digest": "eed91e869fa060d62841cbdf5454a5dd9dd5e76b9ab857e25af162bebcac90da",
+    "set_digest_recipe": "sha256 of json.dumps({filename: sha256(file)}, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False).encode(\"utf-8\")",
+    "per_file_sha256": {
+      "v3_doc_001_p012_annotation_v3.json": "c71596ce24a128a16370592485c97975040e35b1c1799b9fd50c5fa00ca4a543",
+      "v3_doc_001_p020_annotation_v3.json": "47504f2ca54fb805205fb523c067c4dd801b95192b004d7af7378a24ffad89b0",
+      "v3_doc_001_p022_annotation_v3.json": "30df6236c847ed8c282b6c2de11269ef9152fd14489728b4811434ee9881d272",
+      "v3_doc_001_p032_annotation_v3.json": "7cd0dd9188aae019890c19a343d6f88f97965a4665339e4b80410122e35daf8d",
+      "v3_doc_001_p033_annotation_v3.json": "6c1a3f51dbec6f686bf08b5eb63cf39af971dbd27e7556878358f356c70bd5ff",
+      "v3_doc_001_p035_annotation_v3.json": "bb1d36aaddf6ca1095e42204c5faa454d3dedcae51eb54aefddb366c84fcda33",
+      "v3_doc_001_p054_annotation_v3.json": "58ffcf76f8ebcd6a35267c679d6d6b81f6f72bcaa3251c365fef33f09e594fd5",
+      "v3_doc_001_p057_annotation_v3.json": "900a7760915b8272153b3d079b0e555af99c73faa522f47a340ffd7df48aba18",
+      "v3_doc_001_p060_annotation_v3.json": "e3f1f4fb147ac60bb082286f93be4c59910f4b45d1abfc784789c312db1a1450",
+      "v3_doc_001_p063_annotation_v3.json": "09a32b0d25452f023151d22538c901b7832e853474758d672487fa708b1e3bec",
+      "v3_doc_002_p014_annotation_v3.json": "2f05be0491400881b6f0f99956bb9e16598d6bd184a68cca7f4dd86a93376dac",
+      "v3_doc_002_p015_annotation_v3.json": "6a4adf82d182d50e12a583a42a28bd6bea4328cbbaee8d8362f1e3ce50604dd5",
+      "v3_doc_002_p022_annotation_v3.json": "f786e78d80cef627ee40ecedbe36ee9b3be10a0044a9730b0f408ea2a856a7be",
+      "v3_doc_002_p044_annotation_v3.json": "c090a667f0c23a137052d041f710abf8d67b108b540cda74ebf22d7ce148309b",
+      "v3_doc_002_p057_annotation_v3.json": "e90ff48192dc87b374491dd81ca2a7314e575dc44b3cf3af9c050692ce77c885",
+      "v3_doc_002_p058_annotation_v3.json": "17282e0829f8f836c20af685875909b7bd4e4607b758b05397db23f0baf0354e",
+      "v3_doc_002_p060_annotation_v3.json": "54f58af1ad16bac0909e5d291a9166efafa176830d6ec70c814d6858e9153f0b",
+      "v3_doc_002_p061_annotation_v3.json": "d6344a4bedf83b566f4c8d6c6264bf4968cb1694331c89724c0e8c8da5704011",
+      "v3_doc_002_p062_annotation_v3.json": "6036716ba4e0c51533e0b44ab32289dd8f6d1e2766cce6fd913b7682d677df79",
+      "v3_doc_003_p001_annotation_v3.json": "beff500ab13b4298c2339b7e482ce2e0c2b1d674ca4d8066dc25e14af2a3a9fa",
+      "v3_doc_003_p002_annotation_v3.json": "8d111c96e5ea0a2ce733013a8086a05bcbd9d0cbe62739598e285e6834c0eac6",
+      "v3_doc_004_p027_annotation_v3.json": "16c74810ab5a50f07155ffd74503eeb8d69bf128cfedf57131024fecf24dfdab",
+      "v3_doc_004_p033_annotation_v3.json": "d37ce85e3fefde07e42f1d1c4ccb05025f9d12756423b5c951e62395ed317080",
+      "v3_doc_004_p078_annotation_v3.json": "290a063675580193b685e68ab581b8ed1f8e46266ee4b7d57402061221eddcb3",
+      "v3_doc_004_p144_annotation_v3.json": "39d66b6b68c07b65d715df6a1ec8f4929392ce2a75043f6e93ca9bdd8bff03fb",
+      "v3_doc_004_p145_annotation_v3.json": "a4e5251f69657d20b4e822aefb8be7a551728a1b8530d392a060288d9edef88a",
+      "v3_doc_004_p146_annotation_v3.json": "e1466c6a052600e698993bfc323be05cbb560fcbd5c25e464514506bd084bae9",
+      "v3_doc_004_p149_annotation_v3.json": "a7e85398d1af3f6db66517fce703f48f4594275dd04fdb36ad7470e1041cd6d0",
+      "v3_doc_004_p150_annotation_v3.json": "480a79eda94cb7b96027e7cd4aee0176310554920e8ab8ff8b03ee25bea2656e",
+      "v3_doc_005_p005_annotation_v3.json": "2593c716983512dbcf4cb7604f082aa2774e0ee65b140aad6a85e15699715d8c",
+      "v3_doc_005_p007_annotation_v3.json": "cd7d37b4ef297a3ffcd3197aa9edf4af6ec689fa6b72f154634d3c42e5633616",
+      "v3_doc_005_p009_annotation_v3.json": "ad3eb957b189d66c2877324a92c339e9fe8a2718e4e518fd1d4a01d6c37ad05b",
+      "v3_doc_005_p015_annotation_v3.json": "1f858b5c4c5adca26a8e1fb5ee5cb05313ef8c3ba4d73eda62f8a9488afc4dff",
+      "v3_doc_005_p016_annotation_v3.json": "f4b63034fa4f85736af897f2e57eebea76b5c1c5db3f139265a52cd309cb64e9",
+      "v3_doc_005_p022_annotation_v3.json": "a599429ec29489251fe85654de543a18992d556d24d9208cc7f2ccdbab14ba62",
+      "v3_doc_005_p024_annotation_v3.json": "4cad9754b379d09171f5be02c8d5b9f4b5e60667169f1472c27624964bc3bee5",
+      "v3_doc_005_p028_annotation_v3.json": "a824cc647fc81fb010d5ad3e735c0bb987cfdceab8884f808dfea72a7a3af147",
+      "v3_doc_005_p029_annotation_v3.json": "85268dd59f06ba6fcfbff2770ea92fdfb8a00daf68bd4c0553376c4c064bf721",
+      "v3_doc_005_p033_annotation_v3.json": "a4967a0f3c69caa9c9310f1cbffde74f8b247317e99c6c700f5b323f939b9632",
+      "v3_doc_005_p035_annotation_v3.json": "5ee635e71ba520010f975ea194b914feedcb99a90b7bbc352c43d2c1988087c1",
+      "v3_doc_005_p036_annotation_v3.json": "384066a9b0803b1aa507ef738fdfdaffe0ca32009f77f11d5369e27e0563748b",
+      "v3_doc_005_p037_annotation_v3.json": "a989319d1a8fca3b52161c7a093330788db2798ef0248f48d5efc5d8c1ab126c",
+      "v3_doc_005_p038_annotation_v3.json": "e19f7d408c92ae3e63435c812c739af7ec7fd51f58b65085ee6c26cc22e232f8",
+      "v3_doc_006_p002_annotation_v3.json": "d37f543b8d8bd248ec3737a6d83c4730f6a24c47d88ccce2b9b2597499f13942",
+      "v3_doc_006_p017_annotation_v3.json": "5a2f5a8e60580b45396a95167b7d99ae6d9c845fdf9daa7bc073ce5067637a1f",
+      "v3_doc_006_p019_annotation_v3.json": "2ac165e04ab10229379b8013bdf83dea83c7bd61c9a45aa5ff9dc0896d8daa53",
+      "v3_doc_006_p020_annotation_v3.json": "bf5379eb3ae65452238ee471830d6a1894b06659071069053ea9ee172d8a8e73",
+      "v3_doc_006_p022_annotation_v3.json": "e5fde49176e70a66396234adcd584f87b96355c6e79f60ab6afd54eff241bfe1",
+      "v3_doc_006_p023_annotation_v3.json": "efd137edb6b086cb0f5064f50b4983af983ae5fc56798cf4d173f366caf6bdfe",
+      "v3_doc_006_p026_annotation_v3.json": "cb225a158be113ccb334b97a8740ca8400243f1ccbbfe07e5cac44935b3a67af"
+    }
+  },
+  "decision_workspace": {
+    "decision_files": 50,
+    "decision_vs_annotation_mapping": "50:50, no orphan on either side",
+    "decision_files_outside_expected_set": [],
+    "non_decision_entries": 31
+  },
+  "previews": {
+    "total_render_files": 60,
+    "unit_aligned": 55,
+    "candidate_only_leftovers": 5,
+    "note": "All 55 sampled units were rendered, including the 5 late units of v3_doc_007 that were never annotated. Five further renders belong to pages that were considered and not selected as units."
+  },
+  "annotator_provenance": {
+    "ANNOTATOR_A": {
+      "role": "author of all 50 on-disk units",
+      "model": "glm-5.3-flash",
+      "identity_evidence": "providerData.model on every generation span of the Annotator A session record; no self-report was relied upon",
+      "delivered": [
+        "NEW_DEV / NEW_FINAL / SPLIT manifests with digests",
+        "50 of 55 annotation units",
+        "50 decision files and 60 page renders"
+      ],
+      "not_delivered": [
+        "second annotation pass over the 55 units",
+        "ANNOTATOR_A_DEV_DIGEST and ANNOTATOR_A_FINAL_DIGEST freeze",
+        "B_BLIND_PACKAGE production",
+        "CORPUS_LINEAGE.json at the external designated location"
+      ]
+    },
+    "ANNOTATOR_B": {
+      "role": "independent blind annotator, never executed",
+      "model": "deepseek-v4.1-flash",
+      "identity_evidence": "providerData.model on every generation span of the Annotator B session record",
+      "delivered": []
+    },
+    "independence_check": "ANNOTATOR_B model differs from ANNOTATOR_A model; independence was satisfied"
+  },
+  "blockers": [
+    {
+      "code": "ANNOTATOR_AUTHORITY_MISMATCH",
+      "detail": "The 5 outstanding units carry the manifest annotator_id WORKBUDDY_ANNOTATOR_A. The only session available at closeout is the Annotator B session. Writing those units from it would make the recorded annotator_id false.",
+      "effect": "The remaining 5 units could not be authored.",
+      "resolvable_at_closeout": false
+    },
+    {
+      "code": "BLIND_PACKAGE_EMPTY",
+      "detail": "The blind-package, lineage and qualified directories each contain 0 files.",
+      "effect": "The independent blind pass LA-1.3B had no input and could not start.",
+      "resolvable_at_closeout": false
+    }
+  ],
+  "external_directories": {
+    "b_blind_package": 0,
+    "lineage": 0,
+    "qualified": 0
+  },
+  "verification": {
+    "checked_on": "2026-09-30",
+    "manifest_digests_recomputed": true,
+    "parser_executed": false,
+    "evaluator_executed": false,
+    "corpus_mutated": false,
+    "corpus_root_unchanged": true,
+    "repo_head_at_record_time": "c206a014f39fc093176f3e2dd3d25fd69ed0196f"
+  }
+}

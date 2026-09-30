@@ -1,0 +1,9 @@
+{
+  "status": "ANNOTATION_PACK_READY",
+  "schema_version": 2,
+  "gold_type": "REAL_LAYOUT_DEV_GOLD",
+  "split": "DEV",
+  "final_gate_consumed": false,
+  "human_gold_available": false,
+  "pages": []
+}

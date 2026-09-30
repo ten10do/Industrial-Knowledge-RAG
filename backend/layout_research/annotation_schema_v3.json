@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/layout-research/annotation-schema-v3.json",
+  "title": "Canonical layout ownership annotation (ANNOTATION_SCHEMA_V3)",
+  "description": "V3 separates DIRECT structural edges from DERIVED context and explicit ambiguity. Frozen V2 gold is never migrated in place; V3 applies to future corpora only.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "gold_type",
+    "split",
+    "doc_id",
+    "page_number",
+    "width",
+    "height",
+    "coordinate_origin",
+    "slices",
+    "status",
+    "human_confirmed",
+    "blocks",
+    "table_regions",
+    "rows",
+    "columns",
+    "cells",
+    "header_tree",
+    "row_axis",
+    "column_axis",
+    "direct_edges",
+    "derived_context",
+    "ambiguous_relations",
+    "spanning_headers",
+    "table_hierarchy",
+    "continuations"
+  ],
+  "properties": {
+    "schema_version": {"const": 3},
+    "gold_type": {"enum": ["REAL_LAYOUT_DEV_GOLD", "MODEL_ADJUDICATED_DEV_GOLD", "FINAL_GATE_GOLD"]},
+    "split": {"enum": ["DEV", "FINAL_GATE"]},
+    "doc_id": {"pattern": "^doc_[0-9]{3}$"},
+    "page_number": {"type": "integer", "minimum": 1},
+    "width": {"type": "number", "exclusiveMinimum": 0},
+    "height": {"type": "number", "exclusiveMinimum": 0},
+    "coordinate_origin": {"const": "top-left"},
+    "slices": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "status": {"enum": ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "REVIEWED", "ADJUDICATED"]},
+    "human_confirmed": {"type": "boolean"},
+    "authority_mode": {"enum": ["HUMAN", "MODEL_ADJUDICATED"]},
+    "model_adjudicated": {"type": "boolean"},
+    "authority": {"type": "object"},
+    "blocks": {"type": "array", "items": {"$ref": "#/$defs/block"}},
+    "table_regions": {"type": "array", "items": {"$ref": "#/$defs/boxEntity"}},
+    "rows": {"type": "array", "items": {"$ref": "#/$defs/boxEntity"}},
+    "columns": {"type": "array", "items": {"$ref": "#/$defs/boxEntity"}},
+    "cells": {"type": "array", "items": {"$ref": "#/$defs/cell"}},
+    "header_tree": {
+      "description": "Direct parent links among header cells (HEADER_PARENT_OF_HEADER).",
+      "type": "array",
+      "items": {"$ref": "#/$defs/directEdge"}
+    },
+    "row_axis": {
+      "description": "Row-header column declaration: cells that act as row headers.",
+      "type": "object",
+      "required": ["column_ids", "row_header_cell_ids"],
+      "properties": {
+        "column_ids": {"type": "array", "items": {"type": "string"}},
+        "row_header_cell_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "column_axis": {
+      "description": "Column-header declarations per table region.",
+      "type": "object",
+      "required": ["header_row_ids", "column_header_cell_ids"],
+      "properties": {
+        "header_row_ids": {"type": "array", "items": {"type": "string"}},
+        "column_header_cell_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "direct_edges": {
+      "description": "Typed DIRECT structural relations (header->value or header->header).",
+      "type": "array",
+      "items": {"$ref": "#/$defs/directEdge"}
+    },
+    "derived_context": {
+      "description": "Per-value derived context closure. Emitted by the evaluator from direct_edges; stored only when hand-adjudicated.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/derivedContext"}
+    },
+    "ambiguous_relations": {
+      "description": "Explicit AMBIGUOUS declarations: structural slot cannot be resolved. Nearest-text fallback is forbidden.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/ambiguousRelation"}
+    },
+    "spanning_headers": {
+      "description": "Header cells whose bbox spans multiple columns or rows.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cell_id", "spanned_column_ids", "human_confirmed"],
+        "properties": {
+          "cell_id": {"type": "string"},
+          "spanned_column_ids": {"type": "array", "items": {"type": "string"}},
+          "spanned_row_ids": {"type": "array", "items": {"type": "string"}},
+          "human_confirmed": {"type": "boolean"}
+        }
+      }
+    },
+    "table_hierarchy": {
+      "description": "Region-level hierarchy: tables, sub-tables, caption links.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["table_region_id", "human_confirmed"],
+        "properties": {
+          "table_region_id": {"type": "string"},
+          "parent_table_region_id": {"type": "string"},
+          "caption_block_id": {"type": "string"},
+          "human_confirmed": {"type": "boolean"}
+        }
+      }
+    },
+    "continuations": {"type": "array", "items": {"$ref": "#/$defs/continuation"}},
+    "audit": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"gold_type": {"const": "MODEL_ADJUDICATED_DEV_GOLD"}}},
+      "then": {
+        "required": ["authority_mode", "model_adjudicated", "authority"],
+        "properties": {
+          "authority_mode": {"const": "MODEL_ADJUDICATED"},
+          "model_adjudicated": {"const": true},
+          "human_confirmed": {"const": false}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "bbox": {
+      "type": "array",
+      "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}, {"type": "number"}],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "block": {
+      "type": "object",
+      "required": ["block_id", "bbox", "block_type", "reading_order", "section_id", "page_number", "human_confirmed"],
+      "properties": {
+        "block_id": {"type": "string", "minLength": 1},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "block_type": {"enum": ["HEADING", "PARAGRAPH", "LIST", "TABLE_CELL", "CAPTION", "OTHER"]},
+        "reading_order": {"type": "integer", "minimum": 0},
+        "section_id": {"type": "string"},
+        "table_region_id": {"type": "string"},
+        "row_id": {"type": "string"},
+        "column_id": {"type": "string"},
+        "page_number": {"type": "integer", "minimum": 1},
+        "human_confirmed": {"type": "boolean"}
+      }
+    },
+    "boxEntity": {
+      "type": "object",
+      "required": ["bbox", "page_number", "human_confirmed"],
+      "properties": {
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "page_number": {"type": "integer"},
+        "human_confirmed": {"type": "boolean"}
+      }
+    },
+    "cell": {
+      "type": "object",
+      "required": ["cell_id", "bbox", "page_number", "table_region_id", "row_id", "column_id", "role", "human_confirmed"],
+      "properties": {
+        "cell_id": {"type": "string"},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "page_number": {"type": "integer"},
+        "table_region_id": {"type": "string"},
+        "row_id": {"type": "string"},
+        "column_id": {"type": "string"},
+        "role": {"enum": ["header", "unit", "model", "row_header", "data", "caption", "unknown"]},
+        "human_confirmed": {"type": "boolean"}
+      }
+    },
+    "directEdge": {
+      "type": "object",
+      "required": ["edge_id", "source_id", "target_id", "relation", "human_confirmed"],
+      "properties": {
+        "edge_id": {"type": "string"},
+        "source_id": {"type": "string"},
+        "target_id": {"type": "string"},
+        "relation": {
+          "enum": [
+            "HEADER_PARENT_OF_HEADER",
+            "COLUMN_HEADER_OF",
+            "ROW_HEADER_OF",
+            "UNIT_OF",
+            "MODEL_OF",
+            "VALUE_IN_COLUMN",
+            "VALUE_IN_ROW",
+            "TABLE_CONTAINS",
+            "SECTION_CONTAINS",
+            "TABLE_CONTINUES_ON",
+            "CAPTION_DESCRIBES"
+          ]
+        },
+        "evidence": {"enum": ["GEOMETRY", "STRUCTURE", "TEXT_ROLE", "ANNOTATION"]},
+        "human_confirmed": {"type": "boolean"}
+      }
+    },
+    "derivedContext": {
+      "type": "object",
+      "required": ["value_id", "axes"],
+      "properties": {
+        "value_id": {"type": "string"},
+        "axes": {
+          "type": "object",
+          "properties": {
+            "MODEL": {"type": "array", "items": {"type": "string"}},
+            "UNIT": {"type": "array", "items": {"type": "string"}},
+            "ROW": {"type": "array", "items": {"type": "string"}},
+            "COLUMN": {"type": "array", "items": {"type": "string"}},
+            "MULTI_LEVEL": {"type": "array", "items": {"type": "string"}},
+            "SECTION": {"type": "string"}
+          }
+        },
+        "derived_by": {"enum": ["CONTRACT_DERIVATION", "HAND_ADJUDICATED"]}
+      }
+    },
+    "ambiguousRelation": {
+      "type": "object",
+      "required": ["value_id", "axis", "candidates", "human_confirmed"],
+      "properties": {
+        "value_id": {"type": "string"},
+        "axis": {"enum": ["MODEL", "UNIT", "ROW", "COLUMN", "MULTI_LEVEL", "SECTION"]},
+        "candidates": {"type": "array", "items": {"type": "string"}, "minItems": 2},
+        "reason": {"enum": ["COMPETING_PARENTS", "DUPLICATE_HEADER", "GEOMETRY_OVERLAP", "CROSS_PAGE_SPLIT", "OTHER"]},
+        "human_confirmed": {"type": "boolean"}
+      }
+    },
+    "continuation": {
+      "type": "object",
+      "required": ["from_doc_id", "from_page_number", "to_doc_id", "to_page_number", "human_confirmed"],
+      "properties": {
+        "from_doc_id": {"type": "string"},
+        "from_page_number": {"type": "integer"},
+        "from_table_region_id": {"type": "string"},
+        "to_doc_id": {"type": "string"},
+        "to_page_number": {"type": "integer"},
+        "to_table_region_id": {"type": "string"},
+        "human_confirmed": {"type": "boolean"}
+      }
+    }
+  }
+}

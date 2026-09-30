@@ -2,6 +2,12 @@
 
 This index makes the experiment trail discoverable without turning historical candidates into current feature claims. Current status is defined by [Feature Status](../../FEATURE_STATUS.md), [Research Decisions](../../RESEARCH_DECISIONS.md), and the latest release manifest.
 
+## Layout-aware ingestion feasibility
+
+- [LA-0/0.5 Layout-Aware Industrial Document Ingestion](layout_aware_ingestion_feasibility.md), annotation helper ready; qualified private industrial corpus and human DEV Gold required
+- [LA-1.3 Terminal Closeout Report](LA13_TERMINAL_CLOSEOUT_REPORT.md), research line sealed at 50 of 55 units with two recorded blockers
+- [LA-1.3 Corpus Lineage](LA13_CORPUS_LINEAGE.json), machine-readable terminal record for the external corpus
+
 ## Evidence and identity foundations
 
 - [V3.33 Independent Mixed-Evidence Generalization](../../backend/evaluation/V333_INDEPENDENT_MIXED_EVIDENCE_GENERALIZATION.md)
@@ -67,10 +73,10 @@ Current authority: CONTRACT_NATIVE_V367 on V377_ALIGNED_BENCHMARK_V2.
 
 ## Safety feasibility and research freeze
 
-- [V3.78 Abstention Safety Refinement](../../V3.78_EVIDENCE_ABSTENTION_SAFETY_REFINEMENT_REPORT.md) — NO-GO
-- [V3.79 Claim-Support Validation Feasibility](../../V3.79_CLAIM_SUPPORT_VALIDATION_FEASIBILITY_REPORT.md) — PARTIAL/STOP
-- [V3.80 Requirement Extraction Feasibility](../../V3.80_REQUIREMENT_EXTRACTION_UPGRADE_FEASIBILITY_REPORT.md) — PARTIAL/STOP
-- [V3.81 LAT Specification Existence Prefeasibility](../../V3.81_LAT_SPEC_EXISTENCE_PREFEASIBILITY_REPORT.md) — 0.61 precision versus 0.95 gate; NO-GO
+- [V3.78 Abstention Safety Refinement](../../V3.78_EVIDENCE_ABSTENTION_SAFETY_REFINEMENT_REPORT.md), NO-GO
+- [V3.79 Claim-Support Validation Feasibility](../../V3.79_CLAIM_SUPPORT_VALIDATION_FEASIBILITY_REPORT.md), PARTIAL/STOP
+- [V3.80 Requirement Extraction Feasibility](../../V3.80_REQUIREMENT_EXTRACTION_UPGRADE_FEASIBILITY_REPORT.md), PARTIAL/STOP
+- [V3.81 LAT Specification Existence Prefeasibility](../../V3.81_LAT_SPEC_EXISTENCE_PREFEASIBILITY_REPORT.md), 0.61 precision versus 0.95 gate; NO-GO
 - [V3.82 Production Readiness and Operational Hardening](../../V3.82_PRODUCTION_READINESS_AND_OPERATIONAL_HARDENING_REPORT.md)
 - [V3.82 Research Freeze Manifest](../../V382_RESEARCH_FREEZE_MANIFEST.json)
 

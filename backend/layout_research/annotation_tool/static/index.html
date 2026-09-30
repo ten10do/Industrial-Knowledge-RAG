@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Human Layout DEV Annotation</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">REAL_LAYOUT_DEV_GOLD · DEV ONLY</p>
+      <h1>Industrial layout annotation</h1>
+    </div>
+    <div id="save-state" class="save-state">Loading…</div>
+  </header>
+  <div class="privacy-banner">Local-only workspace. Predictions start hidden and never become Gold until explicitly reviewed. Bulk actions require an owner click and are logged.</div>
+  <nav class="mode-bar" aria-label="Review modes">
+    <button class="mode-tab active" data-mode="PAGE_OVERVIEW">A · Page overview</button>
+    <button class="mode-tab" data-mode="TABLE_STRUCTURE_REVIEW">B · Table structure</button>
+    <button class="mode-tab" data-mode="OWNERSHIP_RISK_REVIEW">C · Ownership risk</button>
+    <button class="mode-tab" data-mode="AMBIGUOUS_REVIEW">D · Ambiguous</button>
+    <button class="mode-tab" data-mode="FINAL_PAGE_REVIEW">E · Final page review</button>
+  </nav>
+  <main>
+    <aside>
+      <div id="progress" class="progress"></div>
+      <div id="dashboard" class="dashboard"></div>
+      <input id="page-filter" type="search" placeholder="Filter page or slice">
+      <nav id="page-list" aria-label="Annotation pages"></nav>
+      <div class="card queue-panel">
+        <h2>Review queue</h2>
+        <div id="queue-summary" class="queue-summary"></div>
+        <div class="inline-buttons">
+          <button id="queue-prev" title="Previous (P)">◀ Prev</button>
+          <button id="queue-next" title="Next (N)">Next ▶</button>
+        </div>
+      </div>
+    </aside>
+    <section class="workspace">
+      <div class="toolbar">
+        <strong id="page-title">Select a page</strong>
+        <span id="slice-tags"></span>
+        <label><input id="show-predictions" type="checkbox"> Show prediction overlay</label>
+        <select id="prediction-option" disabled></select>
+        <button id="import-prediction" disabled>Use as editable suggestion</button>
+        <select id="draw-mode">
+          <option value="select">Select</option>
+          <option value="block">Draw block</option>
+          <option value="table">Draw table</option>
+        </select>
+      </div>
+      <div class="content-grid">
+        <div class="preview-panel">
+          <div id="preview-stage" class="preview-stage">
+            <img id="page-preview" alt="Private PDF page preview">
+            <svg id="overlay" aria-label="Layout annotation overlay"></svg>
+          </div>
+          <div class="keyboard-help">
+            Shortcuts: A accept · R reject · M ambiguous · N next · P previous · T next table · H next high-risk · Ctrl+Z undo
+          </div>
+        </div>
+        <div class="editor-panel">
+          <section id="overview-panel" class="card mode-panel">
+            <h2>Page overview</h2>
+            <div id="overview-counts" class="counts-grid"></div>
+            <div class="inline-buttons">
+              <button id="open-highest-risk-table">Open highest-risk table</button>
+              <button id="goto-next-high-risk">Next high-risk relation (H)</button>
+            </div>
+          </section>
+          <section id="table-review-panel" class="card mode-panel hidden">
+            <h2>Table structure review</h2>
+            <div id="table-review-list" class="entity-list"></div>
+          </section>
+          <section id="ownership-panel" class="card mode-panel hidden">
+            <h2>Ownership bundle review</h2>
+            <p class="hint">Each bundle is one header applying to its values. Structure acceptance never confirms ownership. HIGH/AMBIGUOUS bundles require independent review.</p>
+            <div class="bundle-section"><h3>High-risk bundles (independent review)</h3><div id="bundle-list-high" class="entity-list"></div></div>
+            <div class="bundle-section"><h3>Ordinary bundles</h3><div id="bundle-list-ordinary" class="entity-list"></div></div>
+            <h2>Single relations</h2>
+            <select id="edge-filter">
+              <option value="unresolved">Only unresolved</option>
+              <option value="all">All relations</option>
+              <option value="HIGH">Only high-risk</option>
+              <option value="AMBIGUOUS">Only ambiguous</option>
+              <option value="HEADER_APPLIES_TO">HEADER_APPLIES_TO only</option>
+              <option value="unit">Unit bindings only</option>
+              <option value="model">Model-column only</option>
+              <option value="merged">Merged headers only</option>
+              <option value="parameter">Parameter-code only</option>
+              <option value="fault">Fault-code only</option>
+            </select>
+            <div id="ownership-counts" class="counts-grid small"></div>
+            <div id="edge-review-list" class="entity-list"></div>
+          </section>
+          <section id="ambiguous-panel" class="card mode-panel hidden">
+            <h2>Ambiguous review</h2>
+            <p class="hint">Resolve each candidate to a concrete header→value edge, or keep it explicitly AMBIGUOUS. Ambiguous items are counted separately and never forced into matches.</p>
+            <div id="ambiguous-list" class="entity-list"></div>
+          </section>
+          <section id="final-review-panel" class="card mode-panel hidden">
+            <h2>Final page review</h2>
+            <div id="final-checklist" class="checklist"></div>
+            <button id="mark-reviewed" class="danger">Confirm page and mark REVIEWED</button>
+            <pre id="reviewed-gate" class="gate-output"></pre>
+          </section>
+          <section class="card page-controls">
+            <h2>Page authority</h2>
+            <label>Status
+              <select id="page-status">
+                <option>NOT_STARTED</option><option>IN_PROGRESS</option><option>COMPLETED</option><option>REVIEWED</option>
+              </select>
+            </label>
+            <label><input id="page-confirmed" type="checkbox"> Human confirmed page</label>
+            <button id="validate-page">Validate</button>
+            <pre id="validation"></pre>
+          </section>
+          <section class="card">
+            <div class="section-title"><h2>Blocks</h2><button id="delete-block">Delete selected</button></div>
+            <div id="block-list" class="entity-list"></div>
+            <div class="form-grid">
+              <label>ID<input id="block-id"></label>
+              <label>Type<select id="block-type"><option>HEADING</option><option>PARAGRAPH</option><option>LIST</option><option>TABLE_CELL</option><option>CAPTION</option><option>OTHER</option></select></label>
+              <label>Order<input id="block-order" type="number" min="0"></label>
+              <label>Section<input id="block-section"></label>
+              <label>Table<input id="block-table"></label>
+              <label>Row<input id="block-row"></label>
+              <label>Column<input id="block-column"></label>
+              <label class="wide">BBox<input id="block-bbox" placeholder="x0,y0,x1,y1"></label>
+            </div>
+            <button id="update-block">Update selected block</button>
+          </section>
+          <section class="card">
+            <div class="section-title"><h2>Table regions</h2><button id="delete-table">Delete selected</button></div>
+            <div id="table-list" class="entity-list"></div>
+          </section>
+          <section class="card">
+            <h2>Rows and columns</h2>
+            <div class="inline-form"><input id="group-id" placeholder="row/column ID"><select id="group-type"><option value="row">Row</option><option value="column">Column</option></select><button id="add-group">Add</button></div>
+            <div id="group-list" class="entity-list"></div>
+          </section>
+          <section class="card">
+            <h2>Relationships</h2>
+            <div class="form-grid">
+              <label>Source<input id="edge-source" list="entity-ids"></label>
+              <label>Target<input id="edge-target" list="entity-ids"></label>
+              <label>Type<select id="edge-type"><option>HEADER_APPLIES_TO</option><option>SECTION_CONTAINS</option><option>TABLE_CONTAINS</option><option>ROW_CONTAINS</option><option>COLUMN_CONTAINS</option><option>CAPTION_DESCRIBES</option><option>AMBIGUOUS</option></select></label>
+              <datalist id="entity-ids"></datalist>
+            </div>
+            <button id="add-edge">Add human-confirmed edge</button>
+            <div id="edge-list" class="entity-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

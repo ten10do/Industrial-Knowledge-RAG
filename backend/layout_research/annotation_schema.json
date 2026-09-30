@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/layout-research/annotation-schema-v1.json",
+  "title": "Layout-aware ingestion annotation pack",
+  "type": "object",
+  "required": ["status", "schema_version", "split", "human_gold_available", "pages"],
+  "properties": {
+    "status": {"enum": ["ANNOTATION_PACK_READY", "GOLD_READY"]},
+    "schema_version": {"const": 1},
+    "split": {"enum": ["DEV", "FINAL_GATE"]},
+    "human_gold_available": {"type": "boolean"},
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["doc_id", "page_number", "slice_candidate", "annotation_status", "blocks", "table_regions", "relationships"],
+        "properties": {
+          "doc_id": {"pattern": "^doc_[0-9]{3}$"},
+          "page_number": {"type": "integer", "minimum": 1},
+          "slice_candidate": {"type": "string"},
+          "annotation_status": {"enum": ["UNANNOTATED", "IN_PROGRESS", "HUMAN_VERIFIED", "AMBIGUOUS"]},
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["block_id", "bbox", "block_type", "reading_order", "section_id"],
+              "properties": {
+                "block_id": {"type": "string"},
+                "bbox": {"$ref": "#/$defs/bbox"},
+                "block_type": {"enum": ["HEADING", "PARAGRAPH", "LIST", "TABLE_CELL", "CAPTION", "OTHER"]},
+                "reading_order": {"type": "integer", "minimum": 0},
+                "section_id": {"type": "string"}
+              }
+            }
+          },
+          "table_regions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["table_region_id", "bbox"],
+              "properties": {
+                "table_region_id": {"type": "string"},
+                "bbox": {"$ref": "#/$defs/bbox"}
+              }
+            }
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["header_block_id", "value_block_id", "relationship_type"],
+              "properties": {
+                "header_block_id": {"type": "string"},
+                "value_block_id": {"type": "string"},
+                "relationship_type": {"enum": ["SECTION_CONTAINS", "TABLE_CONTAINS", "ROW_CONTAINS", "COLUMN_CONTAINS", "HEADER_APPLIES_TO", "CAPTION_DESCRIBES", "AMBIGUOUS"]}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "bbox": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number"}, {"type": "number"}, {"type": "number"}, {"type": "number"}
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    }
+  }
+}

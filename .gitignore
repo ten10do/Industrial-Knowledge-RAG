@@ -36,3 +36,6 @@ model_cache/
 .idea/
 screenshots/
 .workbuddy/
+.private_layout_eval/
+.local_layout_eval/
+.playwright-cli/
