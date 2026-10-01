@@ -205,7 +205,7 @@ numpy==2.4.6
     #   scipy
     #   sentence-transformers
     #   transformers
-oauthlib==3.3.1
+oauthlib==4.0.0
     # via requests-oauthlib
 onnxruntime==1.29.0
     # via chromadb
