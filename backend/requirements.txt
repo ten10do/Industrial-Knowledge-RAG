@@ -9,7 +9,7 @@ anyio==4.14.2
     #   openai
     #   starlette
 boto3==1.43.67
-    # via -r backend/requirements.in
+    # via -r requirements.in
 botocore==1.43.83
     # via
     #   boto3
@@ -31,9 +31,9 @@ distro==1.9.0
     #   groq
     #   openai
 fastapi==0.139.2
-    # via -r backend/requirements.in
+    # via -r requirements.in
 groq==1.5.0
-    # via -r backend/requirements.in
+    # via -r requirements.in
 h11==0.16.0
     # via
     #   httpcore
@@ -60,11 +60,11 @@ narwhals==2.25.0
     # via scikit-learn
 numpy==2.4.6
     # via
-    #   -r backend/requirements.in
+    #   -r requirements.in
     #   scikit-learn
     #   scipy
 openai==2.47.0
-    # via -r backend/requirements.in
+    # via -r requirements.in
 pydantic==2.13.5
     # via
     #   fastapi
@@ -72,26 +72,26 @@ pydantic==2.13.5
     #   openai
 pydantic-core==2.46.5
     # via pydantic
-pypdf==6.16.2
-    # via -r backend/requirements.in
+pypdf==6.19.0
+    # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   croniter
 python-dotenv==1.2.2
-    # via -r backend/requirements.in
+    # via -r requirements.in
 python-multipart==0.0.32
-    # via -r backend/requirements.in
+    # via -r requirements.in
 redis==8.1.0
     # via
-    #   -r backend/requirements.in
+    #   -r requirements.in
     #   rq
 rq==2.10.0
-    # via -r backend/requirements.in
+    # via -r requirements.in
 s3transfer==0.19.2
     # via boto3
 scikit-learn==1.9.0
-    # via -r backend/requirements.in
+    # via -r requirements.in
 scipy==1.17.1
     # via scikit-learn
 six==1.17.0
@@ -123,4 +123,4 @@ typing-inspection==0.4.4
 urllib3==2.7.0
     # via botocore
 uvicorn==0.51.0
-    # via -r backend/requirements.in
+    # via -r requirements.in

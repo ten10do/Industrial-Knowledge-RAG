@@ -295,7 +295,7 @@ pygments==2.21.0
     #   rich
 pyparsing==3.3.2
     # via pip-requirements-parser
-pypdf==6.16.2
+pypdf==6.19.0
     # via -r backend/requirements.in
 pypika==0.51.1
     # via chromadb
