@@ -44,7 +44,7 @@ charset-normalizer==3.5.1
     # via requests
 chromadb==1.5.9
     # via
-    #   -r legacy_streamlit/requirements.in
+    #   -r requirements.in
     #   langchain-chroma
 click==8.5.0
     # via
@@ -59,7 +59,7 @@ cuda-bindings==13.3.1
     # via torch
 cuda-pathfinder==1.8.0
     # via cuda-bindings
-cuda-toolkit==13.0.3.0
+cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.3.0
     # via torch
 distro==1.9.0
     # via
@@ -87,7 +87,7 @@ googleapis-common-protos==1.75.2
 greenlet==3.5.5
     # via sqlalchemy
 groq==1.5.0
-    # via -r legacy_streamlit/requirements.in
+    # via -r requirements.in
 grpcio==1.83.1
     # via
     #   chromadb
@@ -151,11 +151,11 @@ jsonschema-specifications==2025.9.1
 kubernetes==36.0.3
     # via chromadb
 langchain-chroma==1.1.0
-    # via -r legacy_streamlit/requirements.in
+    # via -r requirements.in
 langchain-classic==1.0.8
     # via langchain-community
 langchain-community==0.4.2
-    # via -r legacy_streamlit/requirements.in
+    # via -r requirements.in
 langchain-core==1.6.1
     # via
     #   langchain-chroma
@@ -250,7 +250,7 @@ oauthlib==3.3.1
 onnxruntime==1.29.0
     # via chromadb
 openai==2.47.0
-    # via -r legacy_streamlit/requirements.in
+    # via -r requirements.in
 opentelemetry-api==1.44.0
     # via
     #   chromadb
@@ -326,8 +326,8 @@ pydeck==0.9.3
     # via streamlit
 pygments==2.21.0
     # via rich
-pypdf==6.16.2
-    # via -r legacy_streamlit/requirements.in
+pypdf[crypto]==6.19.0
+    # via -r requirements.in
 pypika==0.51.1
     # via chromadb
 pyproject-hooks==1.2.0
@@ -338,7 +338,7 @@ python-dateutil==2.9.0.post0
     #   pandas
 python-dotenv==1.2.2
     # via
-    #   -r legacy_streamlit/requirements.in
+    #   -r requirements.in
     #   pydantic-settings
     #   uvicorn
 python-multipart==0.0.32
@@ -389,7 +389,7 @@ scipy==1.17.1
     #   scikit-learn
     #   sentence-transformers
 sentence-transformers==5.7.0
-    # via -r legacy_streamlit/requirements.in
+    # via -r requirements.in
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -408,7 +408,7 @@ sqlalchemy==2.0.52
 starlette==1.6.0
     # via streamlit
 streamlit==1.62.0
-    # via -r legacy_streamlit/requirements.in
+    # via -r requirements.in
 sympy==1.14.0
     # via torch
 tenacity==9.1.4
@@ -444,10 +444,7 @@ typer==0.27.2
     #   transformers
 typing-extensions==4.16.0
     # via
-    #   aiohttp
-    #   aiosignal
     #   altair
-    #   anyio
     #   chromadb
     #   groq
     #   grpcio
@@ -462,10 +459,8 @@ typing-extensions==4.16.0
     #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
-    #   referencing
     #   sentence-transformers
     #   sqlalchemy
-    #   starlette
     #   streamlit
     #   torch
     #   typing-inspection
@@ -481,7 +476,7 @@ uuid-utils==0.17.0
     # via
     #   langchain-core
     #   langsmith
-uvicorn==0.52.4
+uvicorn[standard]==0.52.4
     # via
     #   chromadb
     #   streamlit
