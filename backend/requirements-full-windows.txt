@@ -249,7 +249,7 @@ pydantic-settings==2.15.0
     # via chromadb
 pygments==2.21.0
     # via rich
-pypdf==6.16.2
+pypdf==6.19.0
     # via -r backend/requirements.in
 pypika==0.51.1
     # via chromadb
