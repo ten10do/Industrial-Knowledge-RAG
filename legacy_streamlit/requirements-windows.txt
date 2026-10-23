@@ -282,7 +282,7 @@ pydeck==0.9.3
     # via streamlit
 pygments==2.21.0
     # via rich
-pypdf==6.16.2
+pypdf==6.21.1
     # via -r legacy_streamlit/requirements.in
 pypika==0.51.1
     # via chromadb
