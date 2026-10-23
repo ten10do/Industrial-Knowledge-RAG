@@ -245,7 +245,7 @@ packaging==26.3
     #   transformers
 pandas==3.0.5
     # via streamlit
-pillow==12.3.0
+pillow==13.0.0
     # via streamlit
 propcache==0.5.2
     # via
