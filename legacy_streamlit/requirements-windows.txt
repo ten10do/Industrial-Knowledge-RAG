@@ -207,7 +207,7 @@ onnxruntime==1.29.0
     # via chromadb
 openai==2.47.0
     # via -r legacy_streamlit/requirements.in
-opentelemetry-api==1.44.0
+opentelemetry-api==1.45.1
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
