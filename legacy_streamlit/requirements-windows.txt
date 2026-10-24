@@ -65,7 +65,7 @@ distro==1.9.0
     #   openai
 durationpy==0.11
     # via kubernetes
-filelock==3.32.4
+filelock==4.2.1
     # via
     #   huggingface-hub
     #   torch
